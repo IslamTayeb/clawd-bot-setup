@@ -1,0 +1,8 @@
+python-telegram-bot==21.*
+python-dotenv
+boto3
+scholarly
+requests
+beautifulsoup4
+playwright
+amazon-transcribe
