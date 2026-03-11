@@ -51,6 +51,7 @@ require_command curl
 require_command python3
 require_command ssh
 require_command scp
+require_command tar
 
 echo "=== Clawd Bot EC2 Deployment ==="
 
@@ -403,19 +404,20 @@ grep -v -E '^(GITHUB_USERNAME|GITHUB_TOKEN|OBSIDIAN_VAULT)=' "$PROJECT_DIR/.env"
 } >>"$REMOTE_ENV_FILE"
 
 echo "=== Uploading project files ==="
-ssh_run "mkdir -p ~/clawd-bot"
-scp "${SSH_OPTS[@]}" \
-    "$PROJECT_DIR"/bot.py \
-    "$PROJECT_DIR"/brain.py \
-    "$PROJECT_DIR"/obsidian.py \
-    "$PROJECT_DIR"/search.py \
-    "$PROJECT_DIR"/telegram_formatting.py \
-    "$PROJECT_DIR"/transcribe.py \
-    "$PROJECT_DIR"/transcribe_vocabulary.txt \
-    "$PROJECT_DIR"/requirements.txt \
-    "$PROJECT_DIR"/setup_ec2.sh \
-    "$PROJECT_DIR"/.env.example \
-    "ec2-user@$PUBLIC_IP:~/clawd-bot/"
+ssh_run "mkdir -p ~/clawd-bot && find ~/clawd-bot -mindepth 1 -maxdepth 1 ! -name '.env' ! -name '.venv' -exec rm -rf {} +"
+tar \
+    --exclude='.git' \
+    --exclude='.env' \
+    --exclude='.venv' \
+    --exclude='node_modules' \
+    --exclude='__pycache__' \
+    --exclude='.pytest_cache' \
+    --exclude='*.pem' \
+    --exclude='iphone-mirroring-screen.png' \
+    --exclude='telegram-*.png' \
+    -cf - \
+    -C "$PROJECT_DIR" \
+    . | ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" "tar -xf - -C ~/clawd-bot"
 scp "${SSH_OPTS[@]}" "$REMOTE_ENV_FILE" "ec2-user@$PUBLIC_IP:~/clawd-bot/.env"
 
 echo "=== Running EC2 setup ==="
