@@ -8,24 +8,63 @@ from tests.conftest import run_git
 
 def test_task_file_path_resolves_relative_dates(monkeypatch):
     monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
-    assert vault.task_file_path("today") == "tasks/031026.md"
-    assert vault.task_file_path("yesterday") == "tasks/030926.md"
-    assert vault.task_file_path("tomorrow") == "tasks/031126.md"
-    assert vault.task_file_path("March 9, 2026") == "tasks/030926.md"
+    assert vault.task_file_path("today") == "tasks/260310.md"
+    assert vault.task_file_path("yesterday") == "tasks/260309.md"
+    assert vault.task_file_path("tomorrow") == "tasks/260311.md"
+    assert vault.task_file_path("March 9, 2026") == "tasks/260309.md"
 
 
 def test_add_todos_appends_to_existing_task_file(git_vault, monkeypatch):
     monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
-    task_path = git_vault / "tasks" / "031026.md"
+    task_path = git_vault / "tasks" / "260310.md"
     task_path.write_text("- [ ] existing\n", encoding="utf-8")
-    run_git(git_vault, "add", "tasks/031026.md")
+    run_git(git_vault, "add", "tasks/260310.md")
     run_git(git_vault, "commit", "-m", "Seed task file")
     run_git(git_vault, "push")
 
     message = vault.add_todos(["buy milk"], "today")
 
-    assert message == "Added 1 todo(s) to tasks/031026.md."
+    assert message == "Added 1 todo(s) to tasks/260310.md."
     assert task_path.read_text(encoding="utf-8") == "- [ ] existing\n- [ ] buy milk\n"
+    assert run_git(git_vault, "status", "--short") == ""
+
+
+def test_add_todos_migrates_legacy_task_filename(git_vault, monkeypatch):
+    monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
+    legacy_path = git_vault / "tasks" / "031026.md"
+    preferred_path = git_vault / "tasks" / "260310.md"
+    legacy_path.write_text("- [ ] legacy\n", encoding="utf-8")
+    run_git(git_vault, "add", "tasks/031026.md")
+    run_git(git_vault, "commit", "-m", "Seed legacy task file")
+    run_git(git_vault, "push")
+
+    message = vault.add_todos(["buy milk"], "today")
+
+    assert message == "Added 1 todo(s) to tasks/260310.md."
+    assert not legacy_path.exists()
+    assert preferred_path.read_text(encoding="utf-8") == "- [ ] legacy\n- [ ] buy milk\n"
+    assert run_git(git_vault, "status", "--short") == ""
+
+
+def test_migrate_task_filenames_renames_legacy_files(git_vault):
+    legacy_paths = {
+        "031026.md": "alpha\n",
+        "111925.md": "beta\n",
+    }
+    for filename, content in legacy_paths.items():
+        (git_vault / "tasks" / filename).write_text(content, encoding="utf-8")
+    run_git(git_vault, "add", "tasks")
+    run_git(git_vault, "commit", "-m", "Seed legacy task files")
+    run_git(git_vault, "push")
+
+    message = vault.migrate_task_filenames(sync=True)
+
+    assert "tasks/031026.md -> tasks/260310.md" in message
+    assert "tasks/111925.md -> tasks/251119.md" in message
+    assert not (git_vault / "tasks" / "031026.md").exists()
+    assert not (git_vault / "tasks" / "111925.md").exists()
+    assert (git_vault / "tasks" / "260310.md").read_text(encoding="utf-8") == "alpha\n"
+    assert (git_vault / "tasks" / "251119.md").read_text(encoding="utf-8") == "beta\n"
     assert run_git(git_vault, "status", "--short") == ""
 
 

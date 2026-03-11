@@ -1,3 +1,6 @@
+import { execFileSync, spawnSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import plugin from "../../.openclaw/extensions/clawd-obsidian/index.js";
@@ -63,4 +66,58 @@ describe("clawd-obsidian plugin", () => {
       details: "hello",
     });
   });
+
+  it("renders a valid OpenClaw runtime config", () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "clawd-openclaw-"));
+    const configPath = path.join(tempDir, "openclaw.runtime.json");
+    const pythonExec = process.env.OPENCLAW_PYTHON ?? path.resolve(".venv/bin/python");
+    const openclawEntrypoint = path.resolve("node_modules/openclaw/openclaw.mjs");
+
+    execFileSync(
+      pythonExec,
+      [
+        "-m",
+        "clawd_ops.openclaw_config",
+        "--output",
+        configPath,
+        "--workspace",
+        process.cwd(),
+        "--python-exec",
+        pythonExec,
+      ],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          TELEGRAM_TOKEN: "123456:abc",
+          ALLOWED_USER_ID: "8383879897",
+          AWS_REGION: "us-east-1",
+          BEDROCK_MODEL_ID: "us.anthropic.claude-opus-4-6-v1",
+          BOT_TIMEZONE: "America/New_York",
+        },
+      },
+    );
+
+    const validation = spawnSync(
+      process.execPath,
+      [openclawEntrypoint, "config", "validate", "--json"],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          OPENCLAW_CONFIG_PATH: configPath,
+        },
+        encoding: "utf8",
+      },
+    );
+
+    expect(validation.status).toBe(0);
+    if (validation.stdout.trim()) {
+      expect(JSON.parse(validation.stdout)).toEqual(
+        expect.objectContaining({
+          valid: true,
+        }),
+      );
+    }
+  }, 15000);
 });

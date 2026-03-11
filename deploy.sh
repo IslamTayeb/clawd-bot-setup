@@ -181,6 +181,10 @@ else
     echo "IAM role exists: $ROLE_NAME"
 fi
 
+aws iam attach-role-policy \
+    --role-name "$ROLE_NAME" \
+    --policy-arn "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore" >/dev/null 2>&1 || true
+
 aws iam put-role-policy \
     --role-name "$ROLE_NAME" \
     --policy-name "bedrock-access" \
@@ -188,7 +192,11 @@ aws iam put-role-policy \
         "Version": "2012-10-17",
         "Statement": [{
             "Effect": "Allow",
-            "Action": ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+            "Action": [
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+                "bedrock:ListFoundationModels"
+            ],
             "Resource": "*"
         }]
     }'

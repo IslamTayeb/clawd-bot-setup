@@ -15,19 +15,20 @@ Use this skill when the request involves the user's Obsidian vault, task workflo
 
 ## Task Notes
 
-- Task notes live in `tasks/MMDDYY.md`.
+- Task notes live in `tasks/YYMMDD.md`.
 - Resolve relative dates before acting:
   - `today`
   - `yesterday`
   - `tomorrow`
 - If the target file already exists, append new todos to it.
-- If the user references yesterday's list while it is currently March 10, 2026, that means `tasks/030926.md`.
+- If the user references yesterday's list while it is currently March 10, 2026, that means `tasks/260309.md`.
 
 ## Note Editing
 
 - Prefer editing the smallest relevant note instead of creating new files unnecessarily.
 - Preserve existing markdown structure when appending or prepending.
 - Use generic note tools for arbitrary `.md` files outside the dated task workflow.
+- On Telegram, prefer plain text over Markdown emphasis when describing note changes.
 
 ## Research and Web
 

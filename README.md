@@ -1,10 +1,10 @@
 # Clawd Bot
 
-Telegram assistant for an Obsidian vault, backed by Claude on Bedrock, AWS Transcribe, and an EC2 deploy flow. The current production runtime is still the Python bot, and this repo now also contains the first hybrid OpenClaw migration layer.
+Telegram and Obsidian assistant running on OpenClaw, backed by Claude on Bedrock and an EC2 deploy flow. The repo contains the extracted `clawd_ops` core plus the OpenClaw bridge used by the live runtime.
 
 ## Current Architecture
 
-- `bot.py`: legacy Telegram runtime, still used in production
+- `bot.py`: legacy compatibility wrapper, not the production runtime
 - `clawd_ops/`: extracted business logic package for vault, memory, tasks, search, audio, and the Bedrock tool loop
 - `brain.py`, `obsidian.py`, `search.py`, `transcribe.py`, `telegram_formatting.py`: compatibility wrappers over `clawd_ops`
 - `.openclaw/extensions/clawd-obsidian/`: OpenClaw plugin that bridges tool calls into `python -m clawd_ops`
@@ -14,12 +14,12 @@ Telegram assistant for an Obsidian vault, backed by Claude on Bedrock, AWS Trans
 
 ## Behavior
 
-- Handles text and voice Telegram messages.
+- Handles text and voice Telegram messages through the OpenClaw gateway.
 - Uses Claude tool use through Bedrock for note reading, note writing, todos, memory, research, and web browsing.
 - Syncs the Obsidian vault with git pull before reads and commit or push after writes.
 - Stores durable assistant memory in `personal/clawd.md`.
-- Resolves dated task workflows like `today`, `yesterday`, and explicit dates into `tasks/MMDDYY.md`.
-- Uses AWS Transcribe with streaming for short notes and batch jobs for longer notes.
+- Resolves dated task workflows like `today`, `yesterday`, and explicit dates into `tasks/YYMMDD.md`.
+- Uses the Python audio bridge for transcription, with streaming for short notes and batch jobs for longer notes.
 
 ## Environment
 
@@ -54,15 +54,12 @@ python -c "import bot, brain, obsidian, search, transcribe, clawd_ops"
 
 The Python contract tests cover task date resolution, durable memory rules, vault path safety, git sync behavior, CLI bridge envelopes, and audio normalization. The OpenClaw test layer checks plugin registration and the Python bridge wiring.
 
-## OpenClaw Migration
+## OpenClaw Runtime
 
-The repo is set up for a hybrid migration:
-
-- OpenClaw owns Telegram, sessions, and workspace prompting.
-- `clawd_ops` remains the side-effecting Python layer for vault and AWS workflows.
+- OpenClaw owns Telegram, sessions, workspace prompting, and media ingestion.
+- `clawd_ops` remains the side-effecting Python layer for vault, git sync, Bedrock, and AWS transcription.
 - The OpenClaw plugin delegates tool calls through `python -m clawd_ops ... --json`.
-
-Start from `openclaw.example.json5` when you stand up the gateway.
+- The runtime config is rendered by `python -m clawd_ops.openclaw_config`.
 
 ## Deploy
 

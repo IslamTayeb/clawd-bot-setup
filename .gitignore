@@ -9,3 +9,7 @@ node_modules/
 dist/
 iphone-mirroring-screen.png
 telegram-*.png
+.openclaw-state/
+.openclaw/workspace-state.json
+openclaw.runtime.json
+openclaw.*.json

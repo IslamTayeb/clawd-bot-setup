@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 import re
+import subprocess
 import time
 import uuid
 from pathlib import Path
@@ -23,10 +24,13 @@ async def transcribe_voice(
     oga_path: str,
     region: str = "us-east-1",
     duration_seconds: int | None = None,
+    cleanup_source: bool = True,
 ) -> str:
     source_path = Path(oga_path)
     flac_path = source_path.with_suffix(".flac")
     pcm_path = source_path.with_suffix(".pcm")
+    if duration_seconds is None:
+        duration_seconds = await asyncio.to_thread(_probe_duration_seconds, source_path)
     mode = _transcribe_mode(duration_seconds)
 
     try:
@@ -43,7 +47,10 @@ async def transcribe_voice(
         transcript = await _stream_transcribe(pcm_path, region)
         return _normalize_transcript(transcript)
     finally:
-        for path in (source_path, flac_path, pcm_path):
+        cleanup_paths = [flac_path, pcm_path]
+        if cleanup_source:
+            cleanup_paths.insert(0, source_path)
+        for path in cleanup_paths:
             path.unlink(missing_ok=True)
 
 
@@ -95,6 +102,36 @@ def _normalize_transcript(text: str) -> str:
         normalized = re.sub(pattern, replacement, normalized)
 
     return normalized.strip()
+
+
+def _probe_duration_seconds(audio_path: Path) -> int | None:
+    try:
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(audio_path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except Exception:
+        return None
+
+    output = result.stdout.strip()
+    if not output:
+        return None
+
+    try:
+        return max(1, int(float(output)))
+    except ValueError:
+        return None
 
 
 async def _convert_audio(source_path: Path, target_path: Path, target_format: str) -> None:

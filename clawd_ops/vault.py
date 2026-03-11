@@ -16,6 +16,7 @@ DEFAULT_MEMORY_SECTIONS = (
     "Reference",
 )
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
+LEGACY_TASK_FILE_RE = re.compile(r"^\d{6}\.md$")
 
 try:
     import fcntl
@@ -92,6 +93,14 @@ def _git_upstream() -> tuple[str, str] | None:
     return remote, branch
 
 
+def _is_known_git_path(path: Path) -> bool:
+    rel_path = str(path.resolve().relative_to(_vault()))
+    if path.exists():
+        return True
+    result = _run_git("ls-files", "--error-unmatch", "--", rel_path)
+    return result.returncode == 0
+
+
 def _sync_with_remote(remote: str, branch: str) -> None:
     _git("fetch", remote, branch)
 
@@ -118,8 +127,11 @@ def git_pull() -> None:
 
 def git_push(message: str, paths: list[Path] | None = None) -> None:
     if paths:
-        rel_paths = [str(path.resolve().relative_to(_vault())) for path in paths]
-        _git("add", "--", *rel_paths)
+        rel_paths = [str(path.resolve().relative_to(_vault())) for path in paths if _is_known_git_path(path)]
+        if rel_paths:
+            _git("add", "-A", "--", *rel_paths)
+        else:
+            _git("add", "-A")
     else:
         _git("add", "-A")
 
@@ -214,11 +226,42 @@ def _resolve_task_date(target_date: str = "today"):
 
 def task_file_path(target_date: str = "today") -> str:
     task_date = _resolve_task_date(target_date)
+    return f"tasks/{task_date.strftime('%y%m%d')}.md"
+
+
+def _legacy_task_file_path_for(task_date) -> str:
     return f"tasks/{task_date.strftime('%m%d%y')}.md"
 
 
-def _task_file(target_date: str = "today") -> Path:
-    return _resolve_in_vault(task_file_path(target_date))
+def _task_paths(target_date: str = "today") -> tuple[Path, Path]:
+    task_date = _resolve_task_date(target_date)
+    preferred = _resolve_in_vault(task_file_path(target_date))
+    legacy = _resolve_in_vault(_legacy_task_file_path_for(task_date))
+    return preferred, legacy
+
+
+def _coalesce_task_file(target_date: str = "today", migrate_legacy: bool = False) -> Path:
+    preferred, legacy = _task_paths(target_date)
+    if preferred.exists() and legacy.exists() and preferred != legacy:
+        if not migrate_legacy:
+            return preferred
+
+        preferred_text = preferred.read_text(encoding="utf-8").strip()
+        legacy_text = legacy.read_text(encoding="utf-8").strip()
+        if preferred_text != legacy_text and legacy_text:
+            merged_parts = [part for part in (preferred_text, legacy_text) if part]
+            preferred.write_text("\n\n".join(merged_parts) + "\n", encoding="utf-8")
+        legacy.unlink()
+        return preferred
+
+    if preferred.exists():
+        return preferred
+    if legacy.exists():
+        if migrate_legacy and preferred != legacy:
+            legacy.rename(preferred)
+            return preferred
+        return legacy
+    return preferred
 
 
 def _memory_relative_path() -> str:
@@ -416,9 +459,9 @@ def read_task_list(target_date: str = "today") -> str:
     with _vault_lock():
         git_pull()
 
-        target = _task_file(target_date)
+        target = _coalesce_task_file(target_date)
         if not target.exists():
-            return f"Task file not found: {target.relative_to(_vault())}"
+            return f"Task file not found: {task_file_path(target_date)}"
         return target.read_text(encoding="utf-8")
 
 
@@ -426,7 +469,8 @@ def add_todos(items: list[str], target_date: str = "today") -> str:
     with _vault_lock():
         git_pull()
 
-        target = _task_file(target_date)
+        preferred, legacy = _task_paths(target_date)
+        target = _coalesce_task_file(target_date, migrate_legacy=True)
         target.parent.mkdir(parents=True, exist_ok=True)
 
         lines = []
@@ -446,8 +490,62 @@ def add_todos(items: list[str], target_date: str = "today") -> str:
         updated = f"{existing}{separator}{addition}\n"
         target.write_text(updated, encoding="utf-8")
 
-        git_push(f"Add todos for {target.stem}", [target])
+        commit_paths = [target]
+        if legacy != target:
+            commit_paths.append(legacy)
+        if preferred != target and preferred not in commit_paths:
+            commit_paths.append(preferred)
+
+        git_push(f"Add todos for {target.stem}", commit_paths)
         return f"Added {len(items)} todo(s) to {target.relative_to(_vault())}."
+
+
+def migrate_task_filenames(sync: bool = True) -> str:
+    with _vault_lock():
+        if sync:
+            git_pull()
+
+        tasks_dir = _resolve_in_vault("tasks")
+        if not tasks_dir.exists():
+            return "No tasks directory found."
+
+        migrated = []
+        staged_paths: list[Path] = []
+        for path in sorted(tasks_dir.iterdir()):
+            if not path.is_file() or path.suffix.lower() != ".md":
+                continue
+            if not LEGACY_TASK_FILE_RE.match(path.name):
+                continue
+
+            try:
+                task_date = datetime.strptime(path.stem, "%m%d%y").date()
+            except ValueError:
+                continue
+
+            target = path.with_name(task_date.strftime("%y%m%d") + ".md")
+            if target == path:
+                continue
+
+            if target.exists():
+                existing_text = target.read_text(encoding="utf-8").strip()
+                legacy_text = path.read_text(encoding="utf-8").strip()
+                if existing_text != legacy_text and legacy_text:
+                    merged_parts = [part for part in (existing_text, legacy_text) if part]
+                    target.write_text("\n\n".join(merged_parts) + "\n", encoding="utf-8")
+                path.unlink()
+            else:
+                path.rename(target)
+
+            migrated.append((path.relative_to(_vault()), target.relative_to(_vault())))
+            staged_paths.extend([path, target])
+
+        if not migrated:
+            return "No legacy task files needed migration."
+
+        git_push("Migrate task filenames to YYMMDD", staged_paths)
+        lines = ["Migrated task files to YYMMDD:"]
+        lines.extend(f"- {old_path} -> {new_path}" for old_path, new_path in migrated)
+        return "\n".join(lines)
 
 
 def save_research(title: str, content: str) -> str:

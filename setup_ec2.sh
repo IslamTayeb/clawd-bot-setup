@@ -15,7 +15,7 @@ run_as_ec2_user() {
 
 echo "=== Installing system packages ==="
 dnf update -y
-dnf install -y python3.11 python3.11-pip git tar xz curl \
+dnf install -y python3.11 python3.11-pip git tar xz \
     nss atk at-spi2-atk cups-libs libdrm libXcomposite libXdamage \
     libXrandr mesa-libgbm pango alsa-lib libXtst \
     libxkbcommon libxkbcommon-x11
@@ -47,6 +47,9 @@ echo "=== Installing project dependencies ==="
 run_as_ec2_user "$PYTHON_BIN" -m venv "$VENV_DIR"
 run_as_ec2_user "$VENV_DIR/bin/python" -m pip install --upgrade pip
 run_as_ec2_user "$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements.txt"
+if [ -f "$PROJECT_DIR/requirements-dev.txt" ]; then
+    run_as_ec2_user "$VENV_DIR/bin/pip" install -r "$PROJECT_DIR/requirements-dev.txt"
+fi
 
 if [ -f "$PROJECT_DIR/package-lock.json" ]; then
     echo "=== Installing Node dependencies ==="
@@ -63,16 +66,22 @@ run_as_ec2_user git config --global user.email "clawd-bot@ec2"
 echo "=== Creating systemd service ==="
 cat > /etc/systemd/system/clawd-bot.service <<'SERVICEEOF'
 [Unit]
-Description=Clawd Telegram Bot
-After=network.target
+Description=Clawd OpenClaw Gateway
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
 User=ec2-user
 WorkingDirectory=/home/ec2-user/clawd-bot
 Environment=HOME=/home/ec2-user
+Environment=AWS_PROFILE=default
+Environment=OPENCLAW_CONFIG_PATH=/home/ec2-user/clawd-bot/openclaw.runtime.json
+Environment=OPENCLAW_STATE_DIR=/home/ec2-user/.openclaw
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ec2-user/clawd-bot/node_modules/.bin:/home/ec2-user/clawd-bot/.venv/bin
 EnvironmentFile=/home/ec2-user/clawd-bot/.env
-ExecStart=/home/ec2-user/clawd-bot/.venv/bin/python /home/ec2-user/clawd-bot/bot.py
+ExecStartPre=/bin/bash -lc 'set -a && source /home/ec2-user/clawd-bot/.env && export AWS_PROFILE="${AWS_PROFILE:-default}" && set +a && cd /home/ec2-user/clawd-bot && /home/ec2-user/clawd-bot/.venv/bin/python -m clawd_ops.openclaw_config --output /home/ec2-user/clawd-bot/openclaw.runtime.json --workspace /home/ec2-user/clawd-bot --python-exec /home/ec2-user/clawd-bot/.venv/bin/python'
+ExecStart=/usr/local/bin/node /home/ec2-user/clawd-bot/node_modules/openclaw/openclaw.mjs gateway run
 Restart=always
 RestartSec=10
 

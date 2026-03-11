@@ -1,16 +1,36 @@
 {
-  agents: {
-    defaults: {
-      workspace: ".",
-      model: {
-        primary: "amazon-bedrock/<OPENCLAW_BEDROCK_MODEL_ID>",
-      },
-      tools: {
-        allow: ["clawd-obsidian"],
-      },
+  gateway: {
+    mode: "local",
+    bind: "loopback",
+    auth: { mode: "none" },
+  },
+  session: {
+    scope: "per-sender",
+    reset: {
+      mode: "daily",
+      atHour: 4,
+      idleMinutes: 240,
+    },
+    resetTriggers: ["/new", "/reset"],
+  },
+  channels: {
+    telegram: {
+      enabled: true,
+      botToken: "<TELEGRAM_BOT_TOKEN>",
+      dmPolicy: "allowlist",
+      allowFrom: ["<TELEGRAM_USER_ID>"],
+      groupPolicy: "disabled",
     },
   },
   models: {
+    bedrockDiscovery: {
+      enabled: false,
+      region: "<AWS_REGION>",
+      providerFilter: ["anthropic"],
+      refreshInterval: 3600,
+      defaultContextWindow: 200000,
+      defaultMaxTokens: 8192,
+    },
     providers: {
       "amazon-bedrock": {
         baseUrl: "https://bedrock-runtime.<AWS_REGION>.amazonaws.com",
@@ -19,7 +39,7 @@
         models: [
           {
             id: "<OPENCLAW_BEDROCK_MODEL_ID>",
-            name: "Claude via Amazon Bedrock",
+            name: "Claude Opus 4.6 (Bedrock)",
             reasoning: true,
             input: ["text", "image"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -29,31 +49,63 @@
         ],
       },
     },
-    bedrockDiscovery: {
-      enabled: true,
-      region: "<AWS_REGION>",
-      providerFilter: ["anthropic"],
-    },
-  },
-  channels: {
-    telegram: {
-      enabled: true,
-      botToken: "<TELEGRAM_BOT_TOKEN>",
-      dmPolicy: "allowlist",
-      allowFrom: ["<TELEGRAM_USER_ID>"],
-    },
   },
   plugins: {
     enabled: true,
+    allow: ["clawd-obsidian"],
+    slots: { memory: "none" },
     entries: {
       "clawd-obsidian": {
         enabled: true,
         config: {
-          pythonExec: ".venv/bin/python",
-          bridgeCwd: ".",
+          pythonExec: "<PYTHON_EXEC>",
+          bridgeCwd: "<WORKSPACE_DIR>",
           timeoutMs: 60000,
         },
       },
     },
+  },
+  tools: {
+    profile: "minimal",
+    alsoAllow: ["clawd-obsidian"],
+    media: {
+      audio: {
+        enabled: true,
+        maxBytes: 20971520,
+        models: [
+          {
+            type: "cli",
+            command: "<PYTHON_EXEC>",
+            args: ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
+            timeoutSeconds: 300,
+          },
+        ],
+      },
+    },
+  },
+  agents: {
+    defaults: {
+      workspace: "<WORKSPACE_DIR>",
+      repoRoot: "<WORKSPACE_DIR>",
+      userTimezone: "America/New_York",
+      model: {
+        primary: "amazon-bedrock/<OPENCLAW_BEDROCK_MODEL_ID>",
+      },
+    },
+    list: [
+      {
+        id: "main",
+        default: true,
+        name: "Clawd",
+        tools: {
+          alsoAllow: ["clawd-obsidian"],
+        },
+        identity: {
+          name: "Clawd",
+          theme: "concise Obsidian workflow assistant",
+          emoji: "🦞",
+        },
+      },
+    ],
   },
 }

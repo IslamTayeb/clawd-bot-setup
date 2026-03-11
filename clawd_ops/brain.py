@@ -29,7 +29,7 @@ Core behaviors:
 - Only write durable memory when the user explicitly asks you to remember something for future conversations.
 - When the user asks what you remember about them, use the memory read tool.
 - When the user wants to update or create arbitrary markdown files in the vault, use the write_note tool.
-- Keep todo items short and actionable. The todo workflow writes into tasks/MMDDYY.md files and supports relative dates like today, yesterday, and tomorrow.
+- Keep todo items short and actionable. The todo workflow writes into tasks/YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow.
 - If a tool fails, explain the failure plainly and propose the next best action.
 
 Formatting:
@@ -57,7 +57,7 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "add_todos",
-            "description": "Add todo items to today's Obsidian tasks/MMDDYY.md file. For sub-tasks, prefix an item with a tab character.",
+            "description": "Add todo items to today's Obsidian tasks/YYMMDD.md file. For sub-tasks, prefix an item with a tab character.",
             "inputSchema": {
                 "json": {
                     "type": "object",
@@ -97,7 +97,7 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "read_task_list",
-            "description": "Read a dated task note from the tasks/MMDDYY.md workflow.",
+            "description": "Read a dated task note from the tasks/YYMMDD.md workflow.",
             "inputSchema": {
                 "json": {
                     "type": "object",
