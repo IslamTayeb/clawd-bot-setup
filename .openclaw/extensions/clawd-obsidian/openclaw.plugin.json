@@ -1,0 +1,19 @@
+{
+  "id": "clawd-obsidian",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "pythonExec": {
+        "type": "string"
+      },
+      "bridgeCwd": {
+        "type": "string"
+      },
+      "timeoutMs": {
+        "type": "integer",
+        "minimum": 1000
+      }
+    }
+  }
+}

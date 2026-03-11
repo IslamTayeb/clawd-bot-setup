@@ -1,0 +1,18 @@
+{
+  "name": "clawd-bot-setup",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:openclaw": "vitest run tests/openclaw",
+    "test:python": ".venv/bin/python -m pytest -q",
+    "test": "npm run typecheck && npm run test:openclaw && npm run test:python"
+  },
+  "devDependencies": {
+    "@sinclair/typebox": "0.34.48",
+    "@types/node": "^24.7.2",
+    "openclaw": "2026.3.8",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

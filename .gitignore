@@ -3,5 +3,9 @@
 __pycache__/
 *.pyc
 .venv/
+node_modules/
+.pytest_cache/
+.vitest/
+dist/
 iphone-mirroring-screen.png
 telegram-*.png

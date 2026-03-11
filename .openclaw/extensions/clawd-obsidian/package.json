@@ -1,0 +1,5 @@
+{
+  "name": "clawd-obsidian-openclaw-plugin",
+  "private": true,
+  "type": "module"
+}

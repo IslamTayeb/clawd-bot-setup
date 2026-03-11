@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Create virtualenv
+        run: python -m venv .venv
+
+      - name: Install Python dependencies
+        run: .venv/bin/pip install -r requirements-dev.txt
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run test matrix
+        run: npm test
+
+      - name: Import smoke test
+        run: .venv/bin/python -c "import bot, brain, obsidian, search, transcribe, clawd_ops"
+
+      - name: Shell syntax check
+        run: bash -n deploy.sh && bash -n setup_ec2.sh

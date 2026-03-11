@@ -1,24 +1,25 @@
 # Clawd Bot
 
-Telegram assistant for an Obsidian vault, backed by Claude on Bedrock, AWS Transcribe, and a one-command EC2 deploy flow.
+Telegram assistant for an Obsidian vault, backed by Claude on Bedrock, AWS Transcribe, and an EC2 deploy flow. The current production runtime is still the Python bot, and this repo now also contains the first hybrid OpenClaw migration layer.
 
-## What It Does
+## Current Architecture
 
-- Handles text and voice messages from Telegram.
+- `bot.py`: legacy Telegram runtime, still used in production
+- `clawd_ops/`: extracted business logic package for vault, memory, tasks, search, audio, and the Bedrock tool loop
+- `brain.py`, `obsidian.py`, `search.py`, `transcribe.py`, `telegram_formatting.py`: compatibility wrappers over `clawd_ops`
+- `.openclaw/extensions/clawd-obsidian/`: OpenClaw plugin that bridges tool calls into `python -m clawd_ops`
+- `AGENTS.md` and `skills/obsidian-workflow/SKILL.md`: workspace behavior for the OpenClaw side
+- `openclaw.example.json5`: starter OpenClaw config for Bedrock + Telegram
+- `deploy.sh` and `setup_ec2.sh`: EC2 provisioning and instance bootstrap
+
+## Behavior
+
+- Handles text and voice Telegram messages.
 - Uses Claude tool use through Bedrock for note reading, note writing, todos, memory, research, and web browsing.
-- Syncs an Obsidian vault with Git pull before reads and Git commit/push after writes.
+- Syncs the Obsidian vault with git pull before reads and commit or push after writes.
 - Stores durable assistant memory in `personal/clawd.md`.
+- Resolves dated task workflows like `today`, `yesterday`, and explicit dates into `tasks/MMDDYY.md`.
 - Uses AWS Transcribe with streaming for short notes and batch jobs for longer notes.
-
-## Files
-
-- `bot.py`: Telegram entrypoint and handlers
-- `brain.py`: Bedrock Converse loop and tool wiring
-- `obsidian.py`: vault operations, task workflow, memory, and git sync
-- `transcribe.py`: audio conversion and AWS Transcribe
-- `search.py`: arXiv, Scholar, and web fetch helpers
-- `deploy.sh`: AWS provisioning and deploy
-- `setup_ec2.sh`: instance bootstrap
 
 ## Environment
 
@@ -40,14 +41,28 @@ Optional settings include:
 - `TRANSCRIBE_BUCKET`
 - `TRANSCRIBE_VOCABULARY_NAME`
 
-## Local Smoke Checks
+## Local Development
 
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
-python -c "import bot, brain, obsidian, search, transcribe"
+pip install -r requirements-dev.txt
+npm ci
+npm test
+python -c "import bot, brain, obsidian, search, transcribe, clawd_ops"
 ```
+
+The Python contract tests cover task date resolution, durable memory rules, vault path safety, git sync behavior, CLI bridge envelopes, and audio normalization. The OpenClaw test layer checks plugin registration and the Python bridge wiring.
+
+## OpenClaw Migration
+
+The repo is set up for a hybrid migration:
+
+- OpenClaw owns Telegram, sessions, and workspace prompting.
+- `clawd_ops` remains the side-effecting Python layer for vault and AWS workflows.
+- The OpenClaw plugin delegates tool calls through `python -m clawd_ops ... --json`.
+
+Start from `openclaw.example.json5` when you stand up the gateway.
 
 ## Deploy
 
