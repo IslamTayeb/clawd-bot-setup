@@ -1,3 +1,4 @@
+import subprocess
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -129,3 +130,25 @@ def test_git_push_recovers_non_fast_forward(git_vault, tmp_path):
     run_git(tmp_path, "clone", str(tmp_path / "remote.git"), str(remote_check))
     assert (remote_check / "personal" / "local.md").read_text(encoding="utf-8") == "local\n"
     assert (remote_check / "personal" / "remote.md").read_text(encoding="utf-8") == "remote\n"
+
+
+def test_sync_with_remote_uses_merge_only(monkeypatch):
+    commands: list[tuple[str, ...]] = []
+
+    def fake_git(*args: str) -> str:
+        commands.append(args)
+        return ""
+
+    def fake_run_git(*args: str) -> subprocess.CompletedProcess[str]:
+        commands.append(args)
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+
+    monkeypatch.setattr(vault, "_git", fake_git)
+    monkeypatch.setattr(vault, "_run_git", fake_run_git)
+
+    vault._sync_with_remote("origin", "main")
+
+    assert commands == [
+        ("fetch", "origin", "main"),
+        ("merge", "--no-edit", "--autostash", "-X", "ours", "origin/main"),
+    ]

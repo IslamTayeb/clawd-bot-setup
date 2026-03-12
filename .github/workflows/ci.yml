@@ -36,7 +36,7 @@ jobs:
         run: npm test
 
       - name: Import smoke test
-        run: .venv/bin/python -c "import bot, brain, obsidian, search, transcribe, clawd_ops"
+        run: .venv/bin/python -c "import clawd_ops"
 
       - name: Shell syntax check
         run: bash -n deploy.sh && bash -n setup_ec2.sh

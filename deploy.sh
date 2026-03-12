@@ -412,14 +412,16 @@ grep -v -E '^(GITHUB_USERNAME|GITHUB_TOKEN|OBSIDIAN_VAULT)=' "$PROJECT_DIR/.env"
 } >>"$REMOTE_ENV_FILE"
 
 echo "=== Uploading project files ==="
-ssh_run "mkdir -p ~/clawd-bot && find ~/clawd-bot -mindepth 1 -maxdepth 1 ! -name '.env' ! -name '.venv' -exec rm -rf {} +"
+ssh_run "mkdir -p ~/clawd-bot && find ~/clawd-bot -mindepth 1 -maxdepth 1 ! -name '.env' ! -name '.venv' ! -name 'memory' -exec rm -rf {} +"
 tar \
     --exclude='.git' \
     --exclude='.env' \
     --exclude='.venv' \
+    --exclude='memory' \
     --exclude='node_modules' \
     --exclude='__pycache__' \
     --exclude='.pytest_cache' \
+    --exclude='openclaw.*.json' \
     --exclude='*.pem' \
     --exclude='iphone-mirroring-screen.png' \
     --exclude='telegram-*.png' \
@@ -466,11 +468,12 @@ else
     git -C /home/ec2-user/obsidian-vault remote set-url origin "$VAULT_REPO_URL"
     git -C /home/ec2-user/obsidian-vault branch --set-upstream-to=origin/main main || true
     git -C /home/ec2-user/obsidian-vault fetch origin main
-    if ! git -C /home/ec2-user/obsidian-vault rebase --autostash origin/main; then
-        git -C /home/ec2-user/obsidian-vault rebase --abort || true
-        git -C /home/ec2-user/obsidian-vault merge --no-edit -X ours origin/main
-    fi
 fi
+git -C /home/ec2-user/obsidian-vault config pull.rebase false
+git -C /home/ec2-user/obsidian-vault config merge.conflictstyle zdiff3
+git -C /home/ec2-user/obsidian-vault config rerere.enabled true
+git -C /home/ec2-user/obsidian-vault fetch origin main
+git -C /home/ec2-user/obsidian-vault merge --no-edit --autostash -X ours origin/main
 EOF
 
 if [ "$telegram_ready" -eq 1 ]; then

@@ -115,16 +115,19 @@ def _is_known_git_path(path: Path) -> bool:
 def _sync_with_remote(remote: str, branch: str) -> None:
     _git("fetch", remote, branch)
 
-    rebase = _run_git("rebase", "--autostash", f"{remote}/{branch}")
-    if rebase.returncode == 0:
+    merge = _run_git("merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}")
+    if merge.returncode == 0:
         return
 
-    _run_git("rebase", "--abort")
-    merge = _run_git("merge", "--no-edit", "-X", "ours", f"{remote}/{branch}")
-    if merge.returncode != 0:
-        command = shlex.join(["git", "merge", "--no-edit", "-X", "ours", f"{remote}/{branch}"])
-        details = merge.stderr.strip() or merge.stdout.strip() or f"exit code {merge.returncode}"
-        raise RuntimeError(f"{command} failed after rebase conflict: {details}")
+    abort = _run_git("merge", "--abort")
+    if abort.returncode != 0 and "There is no merge to abort" not in (abort.stderr or abort.stdout):
+        command = shlex.join(["git", "merge", "--abort"])
+        details = abort.stderr.strip() or abort.stdout.strip() or f"exit code {abort.returncode}"
+        raise RuntimeError(f"{command} failed while cleaning up a failed merge: {details}")
+
+    command = shlex.join(["git", "merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}"])
+    details = merge.stderr.strip() or merge.stdout.strip() or f"exit code {merge.returncode}"
+    raise RuntimeError(f"{command} failed: {details}")
 
 
 def git_pull() -> None:
