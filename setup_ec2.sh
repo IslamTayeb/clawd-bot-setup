@@ -61,8 +61,8 @@ echo "=== Installing Playwright Chromium ==="
 run_as_ec2_user "$VENV_DIR/bin/python" -m playwright install chromium
 
 echo "=== Configuring git identity ==="
-run_as_ec2_user git config --global user.name "clawd-bot"
-run_as_ec2_user git config --global user.email "clawd-bot@ec2"
+run_as_ec2_user git config --global user.name "IslamTayeb"
+run_as_ec2_user git config --global user.email "147297243+IslamTayeb@users.noreply.github.com"
 
 echo "=== Creating systemd service ==="
 cat > /etc/systemd/system/clawd-bot.service <<'SERVICEEOF'
