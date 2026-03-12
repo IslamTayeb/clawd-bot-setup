@@ -8,7 +8,7 @@ Telegram and Obsidian assistant running on OpenClaw, backed by Claude on Bedrock
 - `.openclaw/extensions/clawd-obsidian/`: OpenClaw plugin that bridges tool calls into `python -m clawd_ops`
 - `AGENTS.md` and `skills/obsidian-workflow/SKILL.md`: workspace behavior for the OpenClaw side
 - `openclaw.example.json5`: starter OpenClaw config for Bedrock + Telegram
-- `deploy.sh` and `setup_ec2.sh`: EC2 provisioning and instance bootstrap
+- `deploy.sh`, `setup_ec2.sh`, and `sync_app_repo.sh`: EC2 provisioning, bootstrap, and git-based app sync
 
 ## Behavior
 
@@ -65,4 +65,4 @@ The Python contract tests cover task date resolution, durable memory rules, vaul
 ./deploy.sh
 ```
 
-That script provisions or reuses the EC2 instance, uploads the project, configures the vault clone, installs dependencies, and restarts the bot service.
+That script provisions or reuses the EC2 instance, pushes the local repo to GitHub, syncs the EC2 checkout from GitHub, configures the vault clone, installs dependencies, and restarts the bot service. The EC2 host also runs `sync_app_repo.sh` on a timer so tracked workflow changes made on the server can be pushed back to the repo.

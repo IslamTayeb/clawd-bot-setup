@@ -42,6 +42,7 @@ echo "=== Preparing Python runtime ==="
 alternatives --set python3 "$PYTHON_BIN" || true
 "$PYTHON_BIN" -m pip install --upgrade pip
 chown -R ec2-user:ec2-user "$PROJECT_DIR"
+chmod +x "$PROJECT_DIR/setup_ec2.sh" "$PROJECT_DIR/sync_app_repo.sh"
 
 echo "=== Installing project dependencies ==="
 run_as_ec2_user "$PYTHON_BIN" -m venv "$VENV_DIR"
@@ -89,7 +90,36 @@ RestartSec=10
 WantedBy=multi-user.target
 SERVICEEOF
 
+cat > /etc/systemd/system/clawd-bot-repo-sync.service <<'SERVICEEOF'
+[Unit]
+Description=Sync Clawd app repo to GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ec2-user
+WorkingDirectory=/home/ec2-user/clawd-bot
+Environment=HOME=/home/ec2-user
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/bin/bash -lc '/home/ec2-user/clawd-bot/sync_app_repo.sh'
+SERVICEEOF
+
+cat > /etc/systemd/system/clawd-bot-repo-sync.timer <<'SERVICEEOF'
+[Unit]
+Description=Periodic Clawd app repo sync
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+Unit=clawd-bot-repo-sync.service
+
+[Install]
+WantedBy=timers.target
+SERVICEEOF
+
 systemctl daemon-reload
+systemctl enable --now clawd-bot-repo-sync.timer
 
 if grep -Eq '^TELEGRAM_TOKEN=.+' "$PROJECT_DIR/.env" && grep -Eq '^ALLOWED_USER_ID=.+' "$PROJECT_DIR/.env"; then
     systemctl enable clawd-bot

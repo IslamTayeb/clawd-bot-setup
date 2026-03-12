@@ -12,5 +12,5 @@ iphone-mirroring-screen.png
 telegram-*.png
 .openclaw-state/
 .openclaw/workspace-state.json
-openclaw.runtime.json
-openclaw.*.json
+/openclaw.runtime.json
+/openclaw.*.json

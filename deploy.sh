@@ -9,6 +9,7 @@ SG_NAME="clawd-bot-sg"
 INSTANCE_NAME="clawd-bot"
 ROLE_NAME="clawd-bot-ec2-role"
 PROFILE_NAME="clawd-bot-ec2-profile"
+APP_REPO_URL="https://github.com/IslamTayeb/clawd-bot-setup.git"
 VAULT_REPO_URL="https://github.com/IslamTayeb/obsidian-vault.git"
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -46,12 +47,33 @@ ssh_run() {
     ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" "$@"
 }
 
+ensure_local_repo_synced() {
+    if [ -n "$(git -C "$PROJECT_DIR" status --porcelain)" ]; then
+        echo "ERROR: $PROJECT_DIR has uncommitted changes. Commit or stash them before deploy."
+        exit 1
+    fi
+
+    git -C "$PROJECT_DIR" fetch origin main
+
+    if [ "$(git -C "$PROJECT_DIR" rev-parse HEAD)" != "$(git -C "$PROJECT_DIR" rev-parse origin/main)" ]; then
+        if ! git -C "$PROJECT_DIR" merge --no-edit origin/main; then
+            git -C "$PROJECT_DIR" merge --abort >/dev/null 2>&1 || true
+            echo "ERROR: Could not merge origin/main into the local repo automatically."
+            exit 1
+        fi
+    fi
+
+    if [ "$(git -C "$PROJECT_DIR" rev-parse HEAD)" != "$(git -C "$PROJECT_DIR" rev-parse origin/main)" ]; then
+        git -C "$PROJECT_DIR" push origin HEAD:main
+    fi
+}
+
 require_command aws
 require_command curl
+require_command git
 require_command python3
 require_command ssh
 require_command scp
-require_command tar
 
 echo "=== Clawd Bot EC2 Deployment ==="
 
@@ -411,28 +433,6 @@ grep -v -E '^(GITHUB_USERNAME|GITHUB_TOKEN|OBSIDIAN_VAULT)=' "$PROJECT_DIR/.env"
     printf 'TRANSCRIBE_VOCABULARY_NAME=%s\n' "$TRANSCRIBE_VOCABULARY_NAME"
 } >>"$REMOTE_ENV_FILE"
 
-echo "=== Uploading project files ==="
-ssh_run "mkdir -p ~/clawd-bot && find ~/clawd-bot -mindepth 1 -maxdepth 1 ! -name '.env' ! -name '.venv' ! -name 'memory' -exec rm -rf {} +"
-tar \
-    --exclude='.git' \
-    --exclude='.env' \
-    --exclude='.venv' \
-    --exclude='memory' \
-    --exclude='node_modules' \
-    --exclude='__pycache__' \
-    --exclude='.pytest_cache' \
-    --exclude='openclaw.*.json' \
-    --exclude='*.pem' \
-    --exclude='iphone-mirroring-screen.png' \
-    --exclude='telegram-*.png' \
-    -cf - \
-    -C "$PROJECT_DIR" \
-    . | ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" "tar -xf - -C ~/clawd-bot"
-scp "${SSH_OPTS[@]}" "$REMOTE_ENV_FILE" "ec2-user@$PUBLIC_IP:~/clawd-bot/.env"
-
-echo "=== Running EC2 setup ==="
-ssh_run "chmod +x ~/clawd-bot/setup_ec2.sh && sudo bash ~/clawd-bot/setup_ec2.sh"
-
 GITHUB_CREDENTIAL_URL="$(python3 - <<'PY'
 import os
 import urllib.parse
@@ -452,6 +452,62 @@ cat > /home/ec2-user/.git-credentials <<'CRED_EOF'
 $GITHUB_CREDENTIAL_URL
 CRED_EOF
 EOF
+
+echo "=== Preparing app repo on EC2 ==="
+ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<EOF
+set -euo pipefail
+APP_DIR=/home/ec2-user/clawd-bot
+
+if [ ! -d "\$APP_DIR/.git" ]; then
+    TMP_DIR="\$(mktemp -d /home/ec2-user/clawd-bot-bootstrap.XXXXXX)"
+    git clone --branch main --single-branch "$APP_REPO_URL" "\$TMP_DIR"
+
+    for item in .env .venv node_modules memory openclaw.runtime.json; do
+        if [ -e "\$APP_DIR/\$item" ]; then
+            mv "\$APP_DIR/\$item" "\$TMP_DIR/\$item"
+        fi
+    done
+
+    if [ -e "\$APP_DIR/.openclaw/workspace-state.json" ]; then
+        mkdir -p "\$TMP_DIR/.openclaw"
+        mv "\$APP_DIR/.openclaw/workspace-state.json" "\$TMP_DIR/.openclaw/workspace-state.json"
+    fi
+
+    rm -rf "\$APP_DIR"
+    mv "\$TMP_DIR" "\$APP_DIR"
+fi
+
+git -C "\$APP_DIR" remote set-url origin "$APP_REPO_URL"
+git -C "\$APP_DIR" branch --set-upstream-to=origin/main main >/dev/null 2>&1 || true
+git -C "\$APP_DIR" config pull.rebase false
+git -C "\$APP_DIR" config merge.conflictstyle zdiff3
+git -C "\$APP_DIR" config rerere.enabled true
+chmod +x "\$APP_DIR/setup_ec2.sh" "\$APP_DIR/sync_app_repo.sh"
+EOF
+
+echo "=== Syncing app repo changes from EC2 ==="
+ssh_run "cd ~/clawd-bot && ./sync_app_repo.sh"
+
+echo "=== Pushing local app repo ==="
+ensure_local_repo_synced
+
+echo "=== Updating app repo on EC2 ==="
+ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<'EOF'
+set -euo pipefail
+cd /home/ec2-user/clawd-bot
+git fetch origin main
+if ! git merge --ff-only origin/main >/dev/null 2>&1; then
+    if ! git merge --no-edit --autostash origin/main; then
+        git merge --abort >/dev/null 2>&1 || true
+        exit 1
+    fi
+fi
+EOF
+
+scp "${SSH_OPTS[@]}" "$REMOTE_ENV_FILE" "ec2-user@$PUBLIC_IP:~/clawd-bot/.env"
+
+echo "=== Running EC2 setup ==="
+ssh_run "sudo bash ~/clawd-bot/setup_ec2.sh"
 
 echo "=== Syncing Obsidian vault ==="
 ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<EOF
