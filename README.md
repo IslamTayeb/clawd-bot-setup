@@ -13,6 +13,7 @@ Telegram and Obsidian assistant running on OpenClaw, backed by Claude on Bedrock
 ## Behavior
 
 - Handles text and voice Telegram messages through the OpenClaw gateway.
+- Supports `/new`, `/reset`, and `/hardstop` to force a fresh session in Telegram.
 - Uses Claude tool use through Bedrock for note reading, note writing, todos, memory, research, and web browsing.
 - Syncs the Obsidian vault with fetch plus merge before reads and commit or push after writes.
 - Stores durable assistant memory in `memory/clawd.md`.

@@ -27,6 +27,7 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
     assert config["plugins"]["entries"]["clawd-obsidian"]["config"]["pythonExec"] == str(
         python_exec
     )
+    assert config["session"]["resetTriggers"] == ["/new", "/reset", "/hardstop"]
     assert config["tools"]["media"]["audio"]["echoTranscript"] is True
     assert config["tools"]["media"]["audio"]["echoFormat"] == "Heard:\n{transcript}"
     assert config["tools"]["media"]["audio"]["models"][0]["args"] == [

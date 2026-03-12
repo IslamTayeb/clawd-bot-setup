@@ -49,7 +49,7 @@ def build_openclaw_config(
                 "atHour": 4,
                 "idleMinutes": 240,
             },
-            "resetTriggers": ["/new", "/reset"],
+            "resetTriggers": ["/new", "/reset", "/hardstop"],
             "typingIntervalSeconds": 5,
         },
         "channels": {
