@@ -27,6 +27,15 @@ def test_memory_write_requires_explicit_request(git_vault):
         raise AssertionError("expected explicit memory guard to block the write")
 
 
+def test_memory_write_allows_direct_style_preference(git_vault):
+    stored = brain._execute_tool(
+        "remember_memory",
+        {"memory": "Do not use dashes in replies", "section": "Tone"},
+        "stop using dashes in your replies",
+    )
+    assert stored == "Stored memory in memory/clawd.md under Tone."
+
+
 def test_memory_forget_requires_explicit_request(git_vault):
     try:
         brain._execute_tool(

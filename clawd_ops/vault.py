@@ -388,7 +388,7 @@ def _render_memory_sections(sections: dict[str, list[str]]) -> str:
         lines.extend(
             [
                 "## Preferences",
-                "- Add memories by asking Clawd to remember something for later.",
+                "- Add memories by asking Clawd to remember something for later or by setting a standing response preference.",
                 "",
             ]
         )

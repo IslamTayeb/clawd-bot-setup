@@ -28,6 +28,7 @@ Core behaviors:
 - Be concise, practical, and direct.
 - Use tools whenever the user is asking about vault contents, todos, saved memory, or web/paper lookup.
 - Only write durable memory when the user explicitly asks you to remember something for future conversations.
+- Direct standing preferences about how Clawd should reply, such as formatting or tone changes that should keep applying later, count as explicit durable preferences.
 - When the user asks what you remember about them, use the memory read tool.
 - When the user wants to update or create arbitrary markdown files in the vault, use the write_note tool.
 - Keep todo items short and actionable. The todo workflow writes into tasks/YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow.
@@ -47,6 +48,17 @@ MEMORY_WRITE_RE = re.compile(
     r"save\s+(?:this|that)\s+(?:to|in)\s+memory\b|"
     r"store\s+(?:this|that)\s+(?:for\s+later|in\s+memory)\b|"
     r"add\s+(?:this|that)\s+to\s+(?:your\s+)?memory\b"
+    r")",
+    re.IGNORECASE,
+)
+DIRECT_RESPONSE_PREFERENCE_RE = re.compile(
+    r"\b("
+    r"(?:stop|don't|do\s+not|avoid|never|no\s+more)\s+"
+    r"(?:use|using|include|including|add|adding)\b[^.?!]{0,120}\b"
+    r"(?:dash|dashes|em\s+dash|em-dash|symbol|symbols|emoji|emojis|bullet|bullets|markdown|asterisk|asterisks|bold|tone|style|format|formatting)"
+    r"|(?:use|keep|make)\s+(?:your\s+)?(?:repl(?:y|ies)|response|responses|message|messages)\b[^.?!]{0,80}\b"
+    r"(?:short|brief|concise|plain\s+text|plain-text|direct|simple)"
+    r"|(?:be|stay)\s+(?:brief|concise|direct)\b"
     r")",
     re.IGNORECASE,
 )
@@ -390,7 +402,7 @@ def build_converse_request(messages: list[dict]) -> dict:
 
 
 def _allow_memory_write(user_text: str) -> bool:
-    return bool(MEMORY_WRITE_RE.search(user_text))
+    return bool(MEMORY_WRITE_RE.search(user_text) or DIRECT_RESPONSE_PREFERENCE_RE.search(user_text))
 
 
 def _allow_memory_forget(user_text: str) -> bool:

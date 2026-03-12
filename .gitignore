@@ -7,7 +7,7 @@ node_modules/
 .pytest_cache/
 .vitest/
 dist/
-memory/
+memory/.clawd-memory.lock
 iphone-mirroring-screen.png
 telegram-*.png
 .openclaw-state/
