@@ -2,31 +2,10 @@
 set -euo pipefail
 
 PROJECT_DIR="${1:-/home/ec2-user/clawd-bot}"
-REMOTE_NAME="${GIT_REMOTE_NAME:-origin}"
-REMOTE_BRANCH="${GIT_REMOTE_BRANCH:-main}"
+PYTHON_EXEC="${PYTHON_EXEC:-$PROJECT_DIR/.venv/bin/python}"
 
-cd "$PROJECT_DIR"
-
-if [ ! -d .git ]; then
-    exit 0
+if [ ! -x "$PYTHON_EXEC" ]; then
+    PYTHON_EXEC="$(command -v python3)"
 fi
 
-if ! git remote get-url "$REMOTE_NAME" >/dev/null 2>&1; then
-    exit 0
-fi
-
-git fetch "$REMOTE_NAME" "$REMOTE_BRANCH"
-
-git add -A
-if ! git diff --cached --quiet --exit-code; then
-    git commit -m "Workspace sync: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-fi
-
-if ! git merge --ff-only "$REMOTE_NAME/$REMOTE_BRANCH" >/dev/null 2>&1; then
-    if ! git merge --no-edit --autostash "$REMOTE_NAME/$REMOTE_BRANCH"; then
-        git merge --abort >/dev/null 2>&1 || true
-        exit 1
-    fi
-fi
-
-git push "$REMOTE_NAME" "HEAD:$REMOTE_BRANCH"
+exec "$PYTHON_EXEC" -m clawd_ops sync_app_repo --json --payload "{\"project_dir\": \"$PROJECT_DIR\"}"

@@ -170,6 +170,47 @@ const toolDefinitions = [
       { additionalProperties: false },
     ),
   },
+  {
+    command: "list_conflicts",
+    name: "list_conflicts",
+    label: "List Conflicts",
+    description: "List open sync conflicts that need user attention.",
+    parameters: Type.Object(
+      {
+        status: Type.Optional(Type.Union([Type.Literal("open"), Type.Literal("resolved"), Type.Literal("all")])),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    command: "read_conflict",
+    name: "read_conflict",
+    label: "Read Conflict",
+    description: "Show the latest or a specific sync conflict, including options for resolving it.",
+    parameters: Type.Object(
+      {
+        conflict_id: Type.Optional(Type.String()),
+      },
+      { additionalProperties: false },
+    ),
+  },
+  {
+    command: "resolve_conflict",
+    name: "resolve_conflict",
+    label: "Resolve Conflict",
+    description: "Resolve a sync conflict. Only use keep_local or keep_remote after the user explicitly chooses that strategy.",
+    parameters: Type.Object(
+      {
+        conflict_id: Type.Optional(Type.String()),
+        strategy: Type.Union([
+          Type.Literal("retry_sync"),
+          Type.Literal("keep_local"),
+          Type.Literal("keep_remote"),
+        ]),
+      },
+      { additionalProperties: false },
+    ),
+  },
 ];
 
 const plugin = {

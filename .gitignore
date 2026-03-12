@@ -11,6 +11,7 @@ memory/
 iphone-mirroring-screen.png
 telegram-*.png
 .openclaw-state/
+.clawd-state/
 .openclaw/workspace-state.json
 /openclaw.runtime.json
 /openclaw.runtime.json.bak

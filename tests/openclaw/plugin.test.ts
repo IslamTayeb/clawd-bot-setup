@@ -36,7 +36,17 @@ describe("clawd-obsidian plugin", () => {
       on,
     });
 
-    expect(registerTool).toHaveBeenCalledTimes(11);
+    expect(registerTool).toHaveBeenCalledTimes(14);
+    expect(registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "list_conflicts",
+      }),
+    );
+    expect(registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "resolve_conflict",
+      }),
+    );
     expect(on).toHaveBeenCalledWith("before_prompt_build", expect.any(Function));
   });
 

@@ -4,6 +4,7 @@ import re
 
 import boto3
 
+from clawd_ops.conflicts import list_conflicts, read_conflict, resolve_conflict
 from clawd_ops.search import browse_web, search_papers
 from clawd_ops.vault import (
     add_todos,
@@ -30,6 +31,7 @@ Core behaviors:
 - When the user asks what you remember about them, use the memory read tool.
 - When the user wants to update or create arbitrary markdown files in the vault, use the write_note tool.
 - Keep todo items short and actionable. The todo workflow writes into tasks/YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow.
+- If a sync conflict exists, use the conflict tools to explain the situation and wait for the user to choose a resolution strategy.
 - If a tool fails, explain the failure plainly and propose the next best action.
 
 Formatting:
@@ -247,6 +249,68 @@ TOOLS = [
             },
         }
     },
+    {
+        "toolSpec": {
+            "name": "list_conflicts",
+            "description": "List open sync conflicts that need user attention.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["open", "resolved", "all"],
+                            "default": "open",
+                        }
+                    },
+                    "required": [],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "read_conflict",
+            "description": "Read the latest or a specific sync conflict, including resolution options.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "conflict_id": {
+                            "type": "string",
+                            "description": "Optional conflict id. Defaults to the latest open conflict.",
+                            "default": "latest",
+                        }
+                    },
+                    "required": [],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "resolve_conflict",
+            "description": "Resolve a sync conflict. Only use keep_local or keep_remote after the user explicitly chooses that strategy.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "conflict_id": {
+                            "type": "string",
+                            "description": "Optional conflict id. Defaults to the latest open conflict.",
+                            "default": "latest",
+                        },
+                        "strategy": {
+                            "type": "string",
+                            "enum": ["retry_sync", "keep_local", "keep_remote"],
+                            "description": "How to resolve the conflict.",
+                        },
+                    },
+                    "required": ["strategy"],
+                }
+            },
+        }
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -261,6 +325,11 @@ TOOL_FUNCTIONS = {
     "read_memory": lambda: read_memory(),
     "remember_memory": lambda memory, section="Preferences": remember_memory(memory, section),
     "forget_memory": lambda query, section="": forget_memory(query, section),
+    "list_conflicts": lambda status="open": list_conflicts(status),
+    "read_conflict": lambda conflict_id="latest": read_conflict(conflict_id),
+    "resolve_conflict": lambda conflict_id="latest", strategy="retry_sync": resolve_conflict(
+        conflict_id, strategy
+    ),
 }
 
 

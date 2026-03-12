@@ -7,6 +7,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from clawd_ops.conflicts import ConflictError, clear_conflicts, report_conflict
+
 DEFAULT_MEMORY_PATH = "memory/clawd.md"
 DEFAULT_MEMORY_SECTIONS = (
     "Preferences",
@@ -117,6 +119,7 @@ def _sync_with_remote(remote: str, branch: str) -> None:
 
     merge = _run_git("merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}")
     if merge.returncode == 0:
+        clear_conflicts("vault_sync", str(_vault()))
         return
 
     abort = _run_git("merge", "--abort")
@@ -127,7 +130,15 @@ def _sync_with_remote(remote: str, branch: str) -> None:
 
     command = shlex.join(["git", "merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}"])
     details = merge.stderr.strip() or merge.stdout.strip() or f"exit code {merge.returncode}"
-    raise RuntimeError(f"{command} failed: {details}")
+    conflict_id = report_conflict(
+        kind="vault_sync",
+        summary=f"Could not merge vault changes from {remote}/{branch}.",
+        details=f"{command} failed: {details}",
+        repo_path=str(_vault()),
+        remote_name=remote,
+        remote_branch=branch,
+    )
+    raise ConflictError(conflict_id, "Obsidian vault")
 
 
 def git_pull() -> None:

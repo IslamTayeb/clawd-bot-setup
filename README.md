@@ -18,6 +18,7 @@ Telegram and Obsidian assistant running on OpenClaw, backed by Claude on Bedrock
 - Stores durable assistant memory in `memory/clawd.md`.
 - Resolves dated task workflows like `today`, `yesterday`, and explicit dates into `tasks/YYMMDD.md`.
 - Uses the Python audio bridge for transcription, with streaming for short notes and batch jobs for longer notes.
+- Reports sync conflicts to Telegram with follow-up conflict tools for inspection and explicit resolution.
 
 ## Environment
 

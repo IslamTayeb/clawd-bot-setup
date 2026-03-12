@@ -5,7 +5,9 @@ import sys
 from collections.abc import Callable
 
 from clawd_ops.audio import transcribe_voice
+from clawd_ops.app_repo import sync_app_repo
 from clawd_ops.brain import process_message, tool_specs
+from clawd_ops.conflicts import list_conflicts, read_conflict, resolve_conflict
 from clawd_ops.search import browse_web, search_papers
 from clawd_ops.vault import (
     add_todos,
@@ -35,15 +37,19 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "add_todos": add_todos,
     "browse_web": browse_web,
     "forget_memory": forget_memory,
+    "list_conflicts": list_conflicts,
     "list_files": list_files,
     "memory_path": memory_path,
     "process_message": process_message,
+    "read_conflict": read_conflict,
     "read_memory": read_memory,
     "read_notes": read_notes,
     "read_task_list": read_task_list,
     "remember_memory": remember_memory,
+    "resolve_conflict": resolve_conflict,
     "save_research": save_research,
     "search_papers": search_papers,
+    "sync_app_repo": sync_app_repo,
     "task_file_path": task_file_path,
     "tool_manifest": _tool_manifest,
     "write_note": write_note,
@@ -91,7 +97,7 @@ def _serialize_result(command: str, result: object) -> dict:
 
 
 def _serialize_error(command: str, exc: Exception) -> dict:
-    return {
+    error = {
         "ok": False,
         "command": command,
         "error": {
@@ -99,6 +105,9 @@ def _serialize_error(command: str, exc: Exception) -> dict:
             "message": str(exc),
         },
     }
+    if hasattr(exc, "conflict_id"):
+        error["error"]["conflict_id"] = getattr(exc, "conflict_id")
+    return error
 
 
 def _print_human(result: object) -> None:

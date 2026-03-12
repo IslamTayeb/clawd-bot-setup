@@ -145,6 +145,8 @@ def test_sync_with_remote_uses_merge_only(monkeypatch):
 
     monkeypatch.setattr(vault, "_git", fake_git)
     monkeypatch.setattr(vault, "_run_git", fake_run_git)
+    monkeypatch.setattr(vault, "_vault", lambda: Path("/tmp/fake-vault"))
+    monkeypatch.setattr(vault, "clear_conflicts", lambda *args, **kwargs: None)
 
     vault._sync_with_remote("origin", "main")
 
