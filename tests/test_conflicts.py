@@ -68,3 +68,16 @@ def test_resolve_conflict_keep_remote_creates_backup(tmp_path, monkeypatch):
     assert note.read_text(encoding="utf-8") == "remote version\n"
     backup_path = Path(conflicts._find_record(conflict_id, status="all")["backup_path"])
     assert backup_path.exists()
+
+
+def test_sync_app_repo_removes_runtime_backup_files(git_vault):
+    from clawd_ops.app_repo import sync_app_repo
+
+    backup = git_vault / "openclaw.runtime.json.bak.1"
+    backup.write_text('{"telegram":{"botToken":"secret"}}\n', encoding="utf-8")
+
+    message = sync_app_repo(str(git_vault))
+
+    assert message == "Synced app repo with origin/main."
+    assert not backup.exists()
+    assert run_git(git_vault, "status", "--short") == ""

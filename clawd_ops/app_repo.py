@@ -7,6 +7,12 @@ from clawd_ops.conflicts import ConflictError
 from clawd_ops.conflicts import _abort_merge, _commit_all_if_needed, _git, _run_git
 
 
+def _remove_runtime_backups(repo_path: Path) -> None:
+    for candidate in repo_path.glob("openclaw.runtime.json.bak*"):
+        if candidate.is_file():
+            candidate.unlink()
+
+
 def sync_app_repo(
     project_dir: str = "/home/ec2-user/clawd-bot",
     remote_name: str = "origin",
@@ -20,6 +26,7 @@ def sync_app_repo(
     if remote_check.returncode != 0:
         return f"Skipped app repo sync because remote {remote_name} is not configured."
 
+    _remove_runtime_backups(repo_path)
     _git(repo_path, "fetch", remote_name, remote_branch)
     _commit_all_if_needed(
         repo_path,

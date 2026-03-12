@@ -14,5 +14,5 @@ telegram-*.png
 .clawd-state/
 .openclaw/workspace-state.json
 /openclaw.runtime.json
-/openclaw.runtime.json.bak
+/openclaw.runtime.json.bak*
 /openclaw.*.json
