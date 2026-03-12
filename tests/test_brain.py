@@ -10,7 +10,7 @@ def test_build_converse_request_uses_tool_config(git_vault, monkeypatch):
     request = brain.build_converse_request([{"role": "user", "content": [{"text": "hi"}]}])
     assert request["toolConfig"]["tools"] == brain.tool_specs()
     assert request["modelId"] == brain.BEDROCK_MODEL_ID
-    assert "Persistent memory file path: personal/clawd.md" in request["system"][0]["text"]
+    assert "Persistent memory file path: memory/clawd.md" in request["system"][0]["text"]
     assert "Today's task note path is tasks/260310.md." in request["system"][0]["text"]
 
 

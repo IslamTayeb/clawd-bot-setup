@@ -9,9 +9,9 @@ Use this skill when the request involves the user's Obsidian vault, task workflo
 
 ## Durable Memory
 
-- Persistent memory lives in `personal/clawd.md`.
+- Persistent memory lives in `memory/clawd.md`.
 - Only use the memory write tools when the user explicitly asks to remember or forget something for future conversations.
-- When the user asks what Clawd remembers, read `personal/clawd.md` rather than paraphrasing from chat history.
+- When the user asks what Clawd remembers, read `memory/clawd.md` rather than paraphrasing from chat history.
 
 ## Task Notes
 

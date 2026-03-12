@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-DEFAULT_MEMORY_PATH = "personal/clawd.md"
+DEFAULT_MEMORY_PATH = "memory/clawd.md"
 DEFAULT_MEMORY_SECTIONS = (
     "Preferences",
     "Tone",
@@ -22,6 +22,10 @@ try:
     import fcntl
 except ImportError:  # pragma: no cover - only for unsupported platforms
     fcntl = None
+
+
+def _project_root() -> Path:
+    return Path(__file__).resolve().parent.parent
 
 
 def _vault() -> Path:
@@ -43,10 +47,9 @@ def _resolve_in_vault(relative_path: str) -> Path:
         raise ValueError(f"Path escapes the vault: {relative_path}")
     return candidate
 
+
 @contextlib.contextmanager
-def _vault_lock():
-    git_dir = _vault() / ".git"
-    lock_path = git_dir / "clawd-bot.lock" if git_dir.exists() else _vault() / ".clawd-bot.lock"
+def _path_lock(lock_path: Path):
     lock_path.parent.mkdir(parents=True, exist_ok=True)
     with lock_path.open("a+") as lock_file:
         if fcntl is not None:
@@ -56,6 +59,14 @@ def _vault_lock():
         finally:
             if fcntl is not None:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+
+@contextlib.contextmanager
+def _vault_lock():
+    git_dir = _vault() / ".git"
+    lock_path = git_dir / "clawd-bot.lock" if git_dir.exists() else _vault() / ".clawd-bot.lock"
+    with _path_lock(lock_path):
+        yield
 
 def _git_env() -> dict[str, str]:
     return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
@@ -270,11 +281,45 @@ def _memory_relative_path() -> str:
 
 
 def memory_path() -> str:
-    return _memory_relative_path()
+    configured = Path(_memory_relative_path()).expanduser()
+    if configured.is_absolute():
+        return str(configured)
+    return configured.as_posix()
 
 
 def _memory_file() -> Path:
-    return _resolve_in_vault(_memory_relative_path())
+    configured = Path(_memory_relative_path()).expanduser()
+    if configured.is_absolute():
+        return configured.resolve()
+    return (_project_root() / configured).resolve()
+
+
+def _memory_path_label(path: Path | None = None) -> str:
+    target = path or _memory_file()
+    configured = Path(_memory_relative_path()).expanduser()
+    if configured.is_absolute():
+        return str(target)
+    return target.relative_to(_project_root()).as_posix()
+
+
+def _memory_in_vault(path: Path | None = None) -> bool:
+    target = path or _memory_file()
+    try:
+        return target.is_relative_to(_vault())
+    except Exception:
+        return False
+
+
+@contextlib.contextmanager
+def _memory_lock():
+    path = _memory_file()
+    if _memory_in_vault(path):
+        with _vault_lock():
+            yield
+        return
+
+    with _path_lock(path.parent / ".clawd-memory.lock"):
+        yield
 
 
 def _normalize_memory_section(section: str) -> str:
@@ -339,26 +384,25 @@ def _render_memory_sections(sections: dict[str, list[str]]) -> str:
 
 
 def _read_memory_file(sync: bool) -> tuple[Path, str]:
-    if sync:
+    path = _memory_file()
+    if sync and _memory_in_vault(path):
         git_pull()
 
-    path = _memory_file()
     if not path.exists():
         return path, ""
     return path, path.read_text(encoding="utf-8")
 
 
 def read_memory(sync: bool = True) -> str:
-    with _vault_lock():
+    with _memory_lock():
         path, text = _read_memory_file(sync=sync)
-        rel_path = path.relative_to(_vault())
         if not text.strip():
-            return f"Memory file: {rel_path}\n\nNo persistent memory stored yet."
-        return f"Memory file: {rel_path}\n\n{text.strip()}"
+            return f"Memory file: {_memory_path_label(path)}\n\nNo persistent memory stored yet."
+        return f"Memory file: {_memory_path_label(path)}\n\n{text.strip()}"
 
 
 def memory_context(sync: bool = True) -> str:
-    with _vault_lock():
+    with _memory_lock():
         try:
             _, text = _read_memory_file(sync=sync)
         except Exception:
@@ -368,7 +412,7 @@ def memory_context(sync: bool = True) -> str:
 
 
 def remember_memory(memory: str, section: str = "Preferences") -> str:
-    with _vault_lock():
+    with _memory_lock():
         item = _normalize_memory_item(memory)
         if not item:
             raise ValueError("memory must not be empty")
@@ -381,23 +425,24 @@ def remember_memory(memory: str, section: str = "Preferences") -> str:
         target_items = sections.setdefault(normalized_section, [])
 
         if any(existing.casefold() == item.casefold() for existing in target_items):
-            return f"Memory already stored in {path.relative_to(_vault())}."
+            return f"Memory already stored in {_memory_path_label(path)}."
 
         target_items.append(item)
         path.write_text(_render_memory_sections(sections), encoding="utf-8")
-        git_push(f"Update Clawd memory: {normalized_section}", [path])
-        return f"Stored memory in {path.relative_to(_vault())} under {normalized_section}."
+        if _memory_in_vault(path):
+            git_push(f"Update Clawd memory: {normalized_section}", [path])
+        return f"Stored memory in {_memory_path_label(path)} under {normalized_section}."
 
 
 def forget_memory(query: str, section: str = "") -> str:
-    with _vault_lock():
+    with _memory_lock():
         cleaned_query = _normalize_memory_item(query)
         if not cleaned_query:
             raise ValueError("query must not be empty")
 
         path, existing_text = _read_memory_file(sync=True)
         if not existing_text.strip():
-            return f"No memory stored in {path.relative_to(_vault())}."
+            return f"No memory stored in {_memory_path_label(path)}."
 
         target_section = _normalize_memory_section(section) if section.strip() else ""
         sections = _parse_memory_sections(existing_text)
@@ -415,11 +460,12 @@ def forget_memory(query: str, section: str = "") -> str:
             sections[section_name] = kept_items
 
         if removed_count == 0:
-            return f"No memory matched '{cleaned_query}' in {path.relative_to(_vault())}."
+            return f"No memory matched '{cleaned_query}' in {_memory_path_label(path)}."
 
         path.write_text(_render_memory_sections(sections), encoding="utf-8")
-        git_push("Prune Clawd memory", [path])
-        return f"Removed {removed_count} memory item(s) from {path.relative_to(_vault())}."
+        if _memory_in_vault(path):
+            git_push("Prune Clawd memory", [path])
+        return f"Removed {removed_count} memory item(s) from {_memory_path_label(path)}."
 
 
 def _note_commit_message(action: str, path: Path) -> str:

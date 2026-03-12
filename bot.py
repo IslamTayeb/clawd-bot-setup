@@ -153,10 +153,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await message.reply_text("I couldn't transcribe that voice note.")
             return
 
-        if len(transcription) <= 500:
-            await message.reply_text(f"Heard: {transcription}")
-        else:
-            await message.reply_text("Transcribed your note. Processing it now.")
+        await _send_long(update, f"Heard:\n{transcription}")
 
         await context.bot.send_chat_action(chat_id=chat.id, action=ChatAction.TYPING)
         response, history = await asyncio.to_thread(

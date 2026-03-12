@@ -70,10 +70,26 @@ def test_migrate_task_filenames_renames_legacy_files(git_vault):
 
 def test_memory_roundtrip(git_vault):
     stored = vault.remember_memory("Prefers concise replies")
-    assert stored == "Stored memory in personal/clawd.md under Preferences."
+    assert stored == "Stored memory in memory/clawd.md under Preferences."
+    assert (vault._project_root() / "memory" / "clawd.md").exists()
     assert "Prefers concise replies" in vault.read_memory()
     removed = vault.forget_memory("concise replies")
-    assert removed == "Removed 1 memory item(s) from personal/clawd.md."
+    assert removed == "Removed 1 memory item(s) from memory/clawd.md."
+    assert run_git(git_vault, "status", "--short") == ""
+
+
+def test_memory_roundtrip_does_not_require_obsidian_vault(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    monkeypatch.setattr(vault, "_project_root", lambda: workspace)
+    monkeypatch.delenv("OBSIDIAN_VAULT", raising=False)
+    monkeypatch.delenv("CLAWD_MEMORY_PATH", raising=False)
+
+    stored = vault.remember_memory("Prefers direct recommendations")
+
+    assert stored == "Stored memory in memory/clawd.md under Preferences."
+    assert "Prefers direct recommendations" in vault.read_memory(sync=False)
+    assert vault.forget_memory("direct recommendations") == "Removed 1 memory item(s) from memory/clawd.md."
 
 
 def test_write_note_rejects_path_escape(git_vault):

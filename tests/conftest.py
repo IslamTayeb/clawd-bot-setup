@@ -4,6 +4,8 @@ from pathlib import Path
 
 import pytest
 
+from clawd_ops import vault
+
 
 def run_git(cwd: Path, *args: str) -> str:
     result = subprocess.run(
@@ -20,6 +22,7 @@ def run_git(cwd: Path, *args: str) -> str:
 def git_vault(tmp_path, monkeypatch):
     remote = tmp_path / "remote.git"
     worktree = tmp_path / "vault"
+    workspace = tmp_path / "workspace"
 
     run_git(tmp_path, "init", "--bare", str(remote))
     run_git(tmp_path, "clone", str(remote), str(worktree))
@@ -36,9 +39,11 @@ def git_vault(tmp_path, monkeypatch):
     run_git(worktree, "push", "-u", "origin", "main")
     run_git(remote, "symbolic-ref", "HEAD", "refs/heads/main")
 
+    workspace.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("OBSIDIAN_VAULT", str(worktree))
     monkeypatch.setenv("BOT_TIMEZONE", "America/New_York")
     monkeypatch.delenv("CLAWD_MEMORY_PATH", raising=False)
+    monkeypatch.setattr(vault, "_project_root", lambda: workspace)
     return worktree
 
 

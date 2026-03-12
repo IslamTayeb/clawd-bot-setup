@@ -21,7 +21,7 @@ from clawd_ops.vault import (
 )
 
 BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-6-v1")
-SYSTEM_PROMPT_BASE = """You are Clawd, a personal Telegram assistant with access to an Obsidian vault.
+SYSTEM_PROMPT_BASE = """You are Clawd, a personal Telegram assistant with access to an Obsidian vault and a local persistent memory file.
 
 Core behaviors:
 - Be concise, practical, and direct.
@@ -203,7 +203,7 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "read_memory",
-            "description": "Read the assistant's persistent memory file from the Obsidian vault.",
+            "description": "Read the assistant's persistent memory file.",
             "inputSchema": {"json": {"type": "object", "properties": {}, "required": []}},
         }
     },

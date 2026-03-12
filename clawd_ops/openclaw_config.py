@@ -116,6 +116,8 @@ def build_openclaw_config(
                 "audio": {
                     "enabled": True,
                     "maxBytes": 20971520,
+                    "echoTranscript": True,
+                    "echoFormat": "Heard:\n{transcript}",
                     "models": [
                         {
                             "type": "cli",

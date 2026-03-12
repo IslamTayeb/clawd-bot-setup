@@ -72,6 +72,8 @@
       audio: {
         enabled: true,
         maxBytes: 20971520,
+        echoTranscript: true,
+        echoFormat: "Heard:\n{transcript}",
         models: [
           {
             type: "cli",

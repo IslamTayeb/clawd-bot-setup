@@ -2,7 +2,7 @@
 
 Runtime-specific notes:
 
-- Durable memory file: `personal/clawd.md`
+- Durable memory file: `memory/clawd.md`
 - Task workflow: `tasks/YYMMDD.md`
 - Relative dates like today, yesterday, and tomorrow should resolve before writing.
 - If a target task file already exists, append new todos to it.
