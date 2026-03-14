@@ -28,6 +28,9 @@ def build_openclaw_config(
     region = env.get("AWS_REGION", "us-east-1").strip() or "us-east-1"
     timezone_name = env.get("BOT_TIMEZONE", "America/New_York").strip() or "America/New_York"
     model_id = env.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID).strip() or DEFAULT_BEDROCK_MODEL_ID
+    transcribe_timeout_seconds = int(
+        env.get("TRANSCRIBE_TIMEOUT_SECONDS", "1800").strip() or "1800"
+    )
     model_ref = f"amazon-bedrock/{model_id}"
 
     return {
@@ -123,7 +126,7 @@ def build_openclaw_config(
                             "type": "cli",
                             "command": python_path,
                             "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
-                            "timeoutSeconds": 300,
+                            "timeoutSeconds": transcribe_timeout_seconds,
                         }
                     ],
                 }

@@ -35,3 +35,25 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
         "clawd_ops.openclaw_audio_cli",
         "{{MediaPath}}",
     ]
+    assert config["tools"]["media"]["audio"]["models"][0]["timeoutSeconds"] == 1800
+
+
+def test_build_openclaw_config_respects_transcribe_timeout_override(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    python_exec = workspace / ".venv" / "bin" / "python"
+    python_exec.parent.mkdir(parents=True)
+    python_exec.write_text("", encoding="utf-8")
+
+    config = build_openclaw_config(
+        {
+            "TELEGRAM_TOKEN": "123:abc",
+            "ALLOWED_USER_ID": "8383879897",
+            "AWS_REGION": "us-east-1",
+            "TRANSCRIBE_TIMEOUT_SECONDS": "2400",
+        },
+        workspace=str(workspace),
+        python_exec=str(python_exec),
+    )
+
+    assert config["tools"]["media"]["audio"]["models"][0]["timeoutSeconds"] == 2400

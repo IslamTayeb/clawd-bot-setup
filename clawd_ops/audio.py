@@ -17,7 +17,7 @@ from botocore.exceptions import ClientError
 SAMPLE_RATE_HZ = 16000
 CHUNK_SIZE = 8192
 POLL_INTERVAL_SECONDS = 3
-JOB_TIMEOUT_SECONDS = 300
+DEFAULT_TRANSCRIBE_TIMEOUT_SECONDS = 1800
 
 
 async def transcribe_voice(
@@ -31,7 +31,8 @@ async def transcribe_voice(
     pcm_path = source_path.with_suffix(".pcm")
     if duration_seconds is None:
         duration_seconds = await asyncio.to_thread(_probe_duration_seconds, source_path)
-    mode = _transcribe_mode(duration_seconds)
+    configured_mode = _configured_transcribe_mode()
+    mode = _transcribe_mode(duration_seconds, configured_mode)
 
     try:
         await _convert_audio(source_path, flac_path, "flac")
@@ -40,7 +41,7 @@ async def transcribe_voice(
                 transcript = await asyncio.to_thread(_transcribe_job_sync, flac_path, region)
                 return _normalize_transcript(transcript)
             except Exception:
-                if mode == "job":
+                if configured_mode == "job":
                     raise
 
         await _convert_audio(source_path, pcm_path, "pcm")
@@ -54,18 +55,33 @@ async def transcribe_voice(
             path.unlink(missing_ok=True)
 
 
-def _transcribe_mode(duration_seconds: int | None) -> str:
+def _transcribe_mode(duration_seconds: int | None, configured_mode: str | None = None) -> str:
+    mode = configured_mode or _configured_transcribe_mode()
+    return _resolve_transcribe_mode(mode, duration_seconds)
+
+
+def _configured_transcribe_mode() -> str:
     mode = os.environ.get("TRANSCRIBE_MODE", "auto").strip().lower() or "auto"
+    if mode in {"job", "stream"}:
+        return mode
+    return "auto"
+
+
+def _resolve_transcribe_mode(mode: str, duration_seconds: int | None) -> str:
     if mode in {"job", "stream"}:
         return mode
 
     threshold = int(os.environ.get("TRANSCRIBE_AUTO_BATCH_MIN_SECONDS", "90"))
-    if duration_seconds is not None and duration_seconds < threshold:
+    if duration_seconds is not None and duration_seconds <= threshold:
         return "stream"
 
     if os.environ.get("TRANSCRIBE_BUCKET"):
         return "job"
     return "stream"
+
+
+def _transcribe_timeout_seconds() -> int:
+    return int(os.environ.get("TRANSCRIBE_TIMEOUT_SECONDS", str(DEFAULT_TRANSCRIBE_TIMEOUT_SECONDS)))
 
 
 def _normalize_transcript(text: str) -> str:
@@ -241,7 +257,8 @@ def _transcribe_job_sync(audio_path: Path, region: str) -> str:
 
 
 def _wait_for_job(transcribe_client, job_id: str) -> str:
-    deadline = time.time() + JOB_TIMEOUT_SECONDS
+    timeout_seconds = _transcribe_timeout_seconds()
+    deadline = time.time() + timeout_seconds
     while time.time() < deadline:
         response = transcribe_client.get_transcription_job(TranscriptionJobName=job_id)
         job = response["TranscriptionJob"]
@@ -253,7 +270,7 @@ def _wait_for_job(transcribe_client, job_id: str) -> str:
             raise RuntimeError(f"transcription job failed: {reason}")
         time.sleep(POLL_INTERVAL_SECONDS)
     raise TimeoutError(
-        f"transcription job {job_id} did not finish within {JOB_TIMEOUT_SECONDS} seconds"
+        f"transcription job {job_id} did not finish within {timeout_seconds} seconds"
     )
 
 

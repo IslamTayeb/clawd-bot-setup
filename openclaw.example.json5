@@ -79,7 +79,7 @@
             type: "cli",
             command: "<PYTHON_EXEC>",
             args: ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
-            timeoutSeconds: 300,
+            timeoutSeconds: 1800,
           },
         ],
       },
