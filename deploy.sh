@@ -509,6 +509,13 @@ scp "${SSH_OPTS[@]}" "$REMOTE_ENV_FILE" "ec2-user@$PUBLIC_IP:~/clawd-bot/.env"
 echo "=== Running EC2 setup ==="
 ssh_run "sudo bash ~/clawd-bot/setup_ec2.sh"
 
+echo "=== Verifying EC2 runtime ==="
+ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<'EOF'
+set -euo pipefail
+test -x /home/ec2-user/clawd-bot/.venv/bin/python
+test -f /home/ec2-user/clawd-bot/node_modules/openclaw/openclaw.mjs
+EOF
+
 echo "=== Syncing Obsidian vault ==="
 ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<EOF
 set -euo pipefail
@@ -534,7 +541,28 @@ EOF
 
 if [ "$telegram_ready" -eq 1 ]; then
     echo "=== Restarting bot ==="
-    ssh_run "sudo systemctl restart clawd-bot && sudo systemctl status clawd-bot --no-pager"
+    ssh "${SSH_OPTS[@]}" "ec2-user@$PUBLIC_IP" <<'EOF'
+set -euo pipefail
+sudo systemctl restart clawd-bot
+
+stable_active_checks=0
+for attempt in $(seq 1 15); do
+    if sudo systemctl is-active --quiet clawd-bot; then
+        stable_active_checks=$((stable_active_checks + 1))
+        if [ "$stable_active_checks" -ge 2 ]; then
+            sudo systemctl status clawd-bot --no-pager
+            exit 0
+        fi
+    else
+        stable_active_checks=0
+    fi
+    sleep 2
+done
+
+sudo systemctl status clawd-bot --no-pager || true
+sudo journalctl -u clawd-bot -n 80 --no-pager || true
+exit 1
+EOF
 else
     echo "=== Telegram bot service skipped ==="
     echo "TELEGRAM_TOKEN or ALLOWED_USER_ID is missing in $PROJECT_DIR/.env."
