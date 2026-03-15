@@ -22,8 +22,8 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
 
     assert config["models"]["bedrockDiscovery"]["enabled"] is False
     assert config["agents"]["defaults"]["model"]["primary"] == "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
-    assert config["tools"]["alsoAllow"] == ["clawd-obsidian"]
-    assert config["agents"]["list"][0]["tools"]["alsoAllow"] == ["clawd-obsidian"]
+    assert config["tools"]["alsoAllow"] == ["clawd-obsidian", "exec"]
+    assert config["agents"]["list"][0]["tools"]["alsoAllow"] == ["clawd-obsidian", "exec"]
     assert config["plugins"]["entries"]["clawd-obsidian"]["config"]["pythonExec"] == str(
         python_exec
     )
