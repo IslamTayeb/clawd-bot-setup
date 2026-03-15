@@ -32,6 +32,9 @@ def build_openclaw_config(
         env.get("TRANSCRIBE_TIMEOUT_SECONDS", "1800").strip() or "1800"
     )
     model_ref = f"amazon-bedrock/{model_id}"
+    # Keep the agent on the minimal tool profile, but allow the workspace bridge
+    # plus shell execution so bundled CLI-based skills like GitHub can run.
+    additional_tools = ["clawd-obsidian", "exec"]
 
     return {
         "gateway": {
@@ -114,7 +117,7 @@ def build_openclaw_config(
         },
         "tools": {
             "profile": "minimal",
-            "alsoAllow": ["clawd-obsidian"],
+            "alsoAllow": additional_tools.copy(),
             "media": {
                 "audio": {
                     "enabled": True,
@@ -145,7 +148,7 @@ def build_openclaw_config(
                     "default": True,
                     "name": "Clawd",
                     "tools": {
-                        "alsoAllow": ["clawd-obsidian"],
+                        "alsoAllow": additional_tools.copy(),
                     },
                     "identity": {
                         "name": "Clawd",
