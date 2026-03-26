@@ -1,7 +1,7 @@
 #!/bin/bash
 # Parameter Golf Competition Tracker
 # Pulls leaderboard, open PRs, and issues from openai/parameter-golf
-# Also updates the vault tracker .md file
+# ALSO updates the vault tracker .md file and pushes to git
 
 REPO="openai/parameter-golf"
 OUT_DIR="/tmp/parameter-golf-data"
@@ -13,7 +13,7 @@ gh api repos/$REPO/readme --jq '.content' | python3 -c "import sys,base64; print
 cat "$OUT_DIR/readme.md"
 
 echo ""
-echo "=== OPEN PRs ==="
+echo "=== OPEN PRs (latest 50) ==="
 gh pr list --repo $REPO --state open --limit 50 --json number,title,author,createdAt,body,comments --jq '.[] | "PR #\(.number) by \(.author.login) [\(.createdAt[:10])]: \(.title)\nBody: \(.body[:500])\nComments: \(.comments | length)\n---"'
 
 echo ""
@@ -31,16 +31,15 @@ gh api graphql -f query='{ repository(owner:"openai", name:"parameter-golf") { d
 echo ""
 echo "=== UPDATING VAULT TRACKER ==="
 
-# Fetch ALL open PRs with scores
 python3 << 'PYEOF'
 import subprocess, json, re, os, datetime
 
 repo = "openai/parameter-golf"
 vault_tracker = os.environ.get("VAULT_TRACKER", "/home/ec2-user/obsidian-vault/research/parameter-golf-tracker.md")
 
-# Get all open PRs (paginated)
+# Get ALL open PRs with full pagination
 all_prs = []
-for page in range(1, 6):
+for page in range(1, 15):
     r = subprocess.run(
         ["gh", "api", f"/repos/{repo}/pulls?state=open&per_page=100&page={page}&sort=created&direction=desc"],
         capture_output=True, text=True, timeout=30
@@ -53,7 +52,8 @@ for page in range(1, 6):
     all_prs.extend(data)
 
 total_prs = len(all_prs)
-print(f"Fetched {total_prs} open PRs")
+highest_pr = max(pr['number'] for pr in all_prs) if all_prs else 0
+print(f"Fetched {total_prs} open PRs, highest #{highest_pr}")
 
 # Find highest PR number already in tracker
 existing_max = 0
@@ -67,90 +67,66 @@ if os.path.exists(vault_tracker):
 print(f"Highest PR in tracker: #{existing_max}")
 
 # Filter new PRs
-new_prs = [pr for pr in all_prs if pr['number'] > existing_max]
+new_prs = sorted([pr for pr in all_prs if pr['number'] > existing_max], key=lambda x: x['number'])
 if not new_prs:
     print("No new PRs to add")
-    # Still update the total count and timestamp
+    now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-4)))
+    ts = now.strftime("%Y-%m-%d %I:%M %p ET")
     if os.path.exists(vault_tracker):
         with open(vault_tracker) as f:
             content = f.read()
-        now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-4)))
-        ts = now.strftime("%Y-%m-%d %I:%M %p ET")
-        content = re.sub(
-            r'Last updated:.*',
-            f'Last updated: {ts} ({total_prs}-PR sweep, auto-updated)',
-            content
-        )
+        content = re.sub(r'Last updated:.*', f'Last updated: {ts} ({total_prs}-PR sweep, auto-updated)', content)
         with open(vault_tracker, 'w') as f:
             f.write(content)
 else:
     print(f"New PRs to add: {len(new_prs)}")
-
-    # Build new scored and unscored rows
-    scored_rows = []
-    unscored_rows = []
-    
-    for pr in sorted(new_prs, key=lambda x: x['number']):
+    scored = []
+    unscored = []
+    for pr in new_prs:
         title = pr['title']
         num = pr['number']
         author = pr['user']['login']
         date = pr['created_at'][5:10]
-        
         score_match = re.search(r'val_bpb[=:\s]*([0-9]+\.[0-9]+)', title)
+        if not score_match:
+            score_match = re.search(r'([0-9]\.[0-9]{3,})\s*(?:bpb|BPB)', title)
         score = score_match.group(1) if score_match else None
-        
         title_lower = title.lower()
-        if 'non-record' in title_lower or 'non record' in title_lower:
-            ptype = 'Non-record'
-        elif 'record' in title_lower:
-            ptype = 'Record'
-        elif 'wip' in title_lower or 'draft' in title_lower:
-            ptype = 'WIP'
-        else:
-            ptype = '—'
-        
+        ptype = 'Record' if ('record' in title_lower and 'non-record' not in title_lower and 'non record' not in title_lower) else ('Non-record' if 'non-record' in title_lower or 'non record' in title_lower else '—')
         summary = title[:90]
-        
         if score:
-            scored_rows.append(f"| — | {score} | #{num} | {author} | {summary} | {date} | {ptype} | — |")
+            scored.append((score, num, author, summary, date, ptype))
         else:
-            unscored_rows.append(f"| #{num} | {author} | {summary} | {date} | {ptype} | — |")
-    
-    # Build update section
+            unscored.append((num, author, summary, date, ptype))
+
+    scored.sort(key=lambda x: float(x[0]))
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=-4)))
     ts = now.strftime("%Y-%m-%d %I:%M %p ET")
-    
+
     update = f"\n\n---\n\n## AUTO-UPDATE: {ts} — {len(new_prs)} new PRs (#{existing_max+1}-#{max(pr['number'] for pr in new_prs)})\n\n"
     update += f"Total open PRs: {total_prs}\n\n"
-    
-    if scored_rows:
+    if scored:
         update += "### New Scored Entries\n\n"
-        update += "| Rank | Score | PR | Author | Summary | Date | Type | Who |\n"
-        update += "|------|-------|----|--------|---------|------|------|-----|\n"
-        update += "\n".join(scored_rows) + "\n\n"
-    
-    if unscored_rows:
-        update += "### New Unscored / WIP Entries\n\n"
-        update += "| PR | Author | Summary | Date | Type | Who |\n"
-        update += "|----|--------|---------|------|------|-----|\n"
-        update += "\n".join(unscored_rows) + "\n\n"
-    
-    # Append to tracker
+        update += "| Score | PR | Author | Summary | Date | Type |\n"
+        update += "|-------|----|--------|---------|------|------|\n"
+        for s in scored:
+            update += f"| {s[0]} | #{s[1]} | {s[2]} | {s[3]} | {s[4]} | {s[5]} |\n"
+        update += "\n"
+    if unscored:
+        update += f"### New Unscored / WIP Entries ({len(unscored)} total, showing first 30)\n\n"
+        update += "| PR | Author | Summary | Date | Type |\n"
+        update += "|----|--------|---------|------|------|\n"
+        for u in unscored[:30]:
+            update += f"| #{u[0]} | {u[1]} | {u[2]} | {u[3]} | {u[4]} |\n"
+        update += "\n"
+
     with open(vault_tracker) as f:
         content = f.read()
-    
-    content = re.sub(
-        r'Last updated:.*',
-        f'Last updated: {ts} ({total_prs}-PR sweep, auto-updated)',
-        content
-    )
-    
+    content = re.sub(r'Last updated:.*', f'Last updated: {ts} ({total_prs}-PR sweep, auto-updated)', content)
     content += update
-    
     with open(vault_tracker, 'w') as f:
         f.write(content)
-    
-    print(f"Appended {len(scored_rows)} scored + {len(unscored_rows)} unscored rows")
+    print(f"Appended {len(scored)} scored + {len(unscored)} unscored rows")
 
 # Git push
 os.chdir("/home/ec2-user/obsidian-vault")
@@ -161,5 +137,4 @@ if "nothing to commit" not in r.stdout + r.stderr:
     print("Pushed to git")
 else:
     print("No changes to push")
-
 PYEOF
