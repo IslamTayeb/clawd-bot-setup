@@ -1,58 +1,16 @@
 {
-  "gateway": {
-    "mode": "local",
-    "bind": "loopback",
-    "auth": {
-      "mode": "none"
-    }
-  },
   "logging": {
     "level": "info",
     "consoleLevel": "info",
     "consoleStyle": "pretty",
     "redactSensitive": "tools"
   },
-  "session": {
-    "scope": "per-sender",
-    "reset": {
-      "mode": "daily",
-      "atHour": 4,
-      "idleMinutes": 240
-    },
-    "resetTriggers": [
-      "/new",
-      "/reset",
-      "/hardstop"
-    ],
-    "typingIntervalSeconds": 5
-  },
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "botToken": "8545446581:AAE7ST2aGjAp1nng7_p0IRN5Ag9uTiGwqu4",
-      "dmPolicy": "allowlist",
-      "allowFrom": [
-        "8383879897"
-      ],
-      "groupPolicy": "disabled"
-    }
-  },
   "models": {
-    "bedrockDiscovery": {
-      "enabled": false,
-      "region": "us-east-1",
-      "providerFilter": [
-        "anthropic"
-      ],
-      "refreshInterval": 3600,
-      "defaultContextWindow": 200000,
-      "defaultMaxTokens": 8192
-    },
     "providers": {
       "amazon-bedrock": {
         "baseUrl": "https://bedrock-runtime.us-east-1.amazonaws.com",
-        "api": "bedrock-converse-stream",
         "auth": "aws-sdk",
+        "api": "bedrock-converse-stream",
         "models": [
           {
             "id": "us.anthropic.claude-opus-4-6-v1",
@@ -73,26 +31,45 @@
           }
         ]
       }
+    },
+    "bedrockDiscovery": {
+      "enabled": false,
+      "region": "us-east-1",
+      "providerFilter": [
+        "anthropic"
+      ],
+      "refreshInterval": 3600,
+      "defaultContextWindow": 200000,
+      "defaultMaxTokens": 8192
     }
   },
-  "plugins": {
-    "enabled": true,
-    "allow": [
-      "clawd-obsidian"
-    ],
-    "slots": {
-      "memory": "none"
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+      },
+      "workspace": "/home/ec2-user/clawd-bot",
+      "repoRoot": "/home/ec2-user/clawd-bot",
+      "userTimezone": "America/New_York"
     },
-    "entries": {
-      "clawd-obsidian": {
-        "enabled": true,
-        "config": {
-          "bridgeCwd": "/home/ec2-user/clawd-bot",
-          "pythonExec": "/home/ec2-user/clawd-bot/.venv/bin/python",
-          "timeoutMs": 60000
+    "list": [
+      {
+        "id": "main",
+        "default": true,
+        "name": "Clawd",
+        "identity": {
+          "name": "Clawd",
+          "theme": "concise Obsidian workflow assistant",
+          "emoji": "🦞"
+        },
+        "tools": {
+          "alsoAllow": [
+            "clawd-obsidian",
+            "exec"
+          ]
         }
       }
-    }
+    ]
   },
   "tools": {
     "profile": "minimal",
@@ -104,8 +81,6 @@
       "audio": {
         "enabled": true,
         "maxBytes": 20971520,
-        "echoTranscript": true,
-        "echoFormat": "Heard:\n{transcript}",
         "models": [
           {
             "provider": "openai",
@@ -121,7 +96,9 @@
             ],
             "timeoutSeconds": 1800
           }
-        ]
+        ],
+        "echoTranscript": true,
+        "echoFormat": "Heard:\n{transcript}"
       }
     }
   },
@@ -129,6 +106,9 @@
     "tts": {
       "auto": "tagged",
       "provider": "openai",
+      "modelOverrides": {
+        "enabled": true
+      },
       "openai": {
         "model": "gpt-4o-mini-tts",
         "voice": "alloy"
@@ -137,38 +117,70 @@
         "enabled": true,
         "voice": "en-US-GuyNeural",
         "lang": "en-US"
-      },
-      "modelOverrides": {
-        "enabled": true
       }
     }
   },
-  "agents": {
-    "defaults": {
-      "workspace": "/home/ec2-user/clawd-bot",
-      "repoRoot": "/home/ec2-user/clawd-bot",
-      "userTimezone": "America/New_York",
-      "model": {
-        "primary": "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
-      }
+  "commands": {
+    "native": "auto",
+    "nativeSkills": "auto",
+    "restart": true,
+    "ownerDisplay": "raw"
+  },
+  "session": {
+    "scope": "per-sender",
+    "resetTriggers": [
+      "/new",
+      "/reset",
+      "/hardstop"
+    ],
+    "reset": {
+      "mode": "daily",
+      "atHour": 4,
+      "idleMinutes": 240
     },
-    "list": [
-      {
-        "id": "main",
-        "default": true,
-        "name": "Clawd",
-        "tools": {
-          "alsoAllow": [
-            "clawd-obsidian",
-            "exec"
-          ]
-        },
-        "identity": {
-          "name": "Clawd",
-          "theme": "concise Obsidian workflow assistant",
-          "emoji": "\ud83e\udd9e"
+    "typingIntervalSeconds": 5
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "dmPolicy": "allowlist",
+      "botToken": "8545446581:AAE7ST2aGjAp1nng7_p0IRN5Ag9uTiGwqu4",
+      "allowFrom": [
+        "8383879897"
+      ],
+      "groupPolicy": "disabled",
+      "streaming": "partial"
+    }
+  },
+  "gateway": {
+    "mode": "local",
+    "bind": "loopback",
+    "auth": {
+      "mode": "none"
+    }
+  },
+  "plugins": {
+    "enabled": true,
+    "allow": [
+      "clawd-obsidian",
+      "telegram"
+    ],
+    "slots": {
+      "memory": "none"
+    },
+    "entries": {
+      "clawd-obsidian": {
+        "enabled": true,
+        "config": {
+          "bridgeCwd": "/home/ec2-user/clawd-bot",
+          "pythonExec": "/home/ec2-user/clawd-bot/.venv/bin/python",
+          "timeoutMs": 60000
         }
       }
-    ]
+    }
+  },
+  "meta": {
+    "lastTouchedVersion": "2026.3.8",
+    "lastTouchedAt": "2026-04-04T09:19:15.733Z"
   }
 }
