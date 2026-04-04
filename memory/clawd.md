@@ -9,9 +9,9 @@ Persistent preferences and long-lived context for the Telegram assistant.
 - Don't glaze / no unnecessary compliments or praise.
 
 ## Projects
-- Parameter Golf (openai/parameter-golf) competition tracker: vault note at research/parameter-golf-tracker.md, cron job every 6h for updates.
+- Parameter Golf (openai/parameter-golf) competition tracker: vault note at projects/parameter-golf-tracker.md, cron job every 6h for updates.
 
 ## User
 - GitHub username: IslamTayeb. gh CLI authenticated on EC2 with repo/org/workflow scopes.
 
-_Last updated: 2026-03-21 21:30 UTC_
+_Last updated: 2026-04-04 08:57 UTC_
