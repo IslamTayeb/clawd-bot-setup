@@ -66,7 +66,7 @@ def test_build_openclaw_config_has_tts(tmp_path):
     config, _ = _build_config(tmp_path)
 
     tts = config["messages"]["tts"]
-    assert tts["auto"] == "tagged"
+    assert tts["auto"] == "always"
     assert tts["provider"] == "openai"
     assert tts["openai"]["model"] == "gpt-4o-mini-tts"
     assert tts["edge"]["enabled"] is True
