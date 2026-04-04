@@ -20,14 +20,21 @@ def build_openclaw_config(
     workspace: str | None = None,
     python_exec: str | None = None,
 ) -> dict[str, object]:
-    workspace_dir = workspace or env.get("CLAWD_BRIDGE_CWD", "").strip() or str(Path.cwd())
+    workspace_dir = (
+        workspace or env.get("CLAWD_BRIDGE_CWD", "").strip() or str(Path.cwd())
+    )
     python_path = python_exec or env.get("CLAWD_PYTHON_EXEC", "").strip()
     if not python_path:
         python_path = str(Path(workspace_dir) / ".venv" / "bin" / "python")
 
     region = env.get("AWS_REGION", "us-east-1").strip() or "us-east-1"
-    timezone_name = env.get("BOT_TIMEZONE", "America/New_York").strip() or "America/New_York"
-    model_id = env.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID).strip() or DEFAULT_BEDROCK_MODEL_ID
+    timezone_name = (
+        env.get("BOT_TIMEZONE", "America/New_York").strip() or "America/New_York"
+    )
+    model_id = (
+        env.get("BEDROCK_MODEL_ID", DEFAULT_BEDROCK_MODEL_ID).strip()
+        or DEFAULT_BEDROCK_MODEL_ID
+    )
     transcribe_timeout_seconds = int(
         env.get("TRANSCRIBE_TIMEOUT_SECONDS", "1800").strip() or "1800"
     )
@@ -36,7 +43,7 @@ def build_openclaw_config(
     # plus shell execution so bundled CLI-based skills like GitHub can run.
     additional_tools = ["clawd-obsidian", "exec"]
 
-    return {
+    config = {
         "gateway": {
             "mode": "local",
             "bind": "loopback",
@@ -77,9 +84,6 @@ def build_openclaw_config(
                 "defaultMaxTokens": 8192,
             },
             "providers": {
-                "openai": {
-                    "apiKey": env.get("OPENAI_API_KEY", "").strip() or None,
-                },
                 "amazon-bedrock": {
                     "baseUrl": f"https://bedrock-runtime.{region}.amazonaws.com",
                     "api": "bedrock-converse-stream",
@@ -178,6 +182,18 @@ def build_openclaw_config(
             ],
         },
     }
+
+    hooks = dict(config.get("hooks", {}))
+    hooks.update(
+        {
+            "enabled": True,
+            "token": env.get("OPENCLAW_HOOK_TOKEN", "").strip() or "change-me",
+            "path": "/hooks",
+            "presets": ["gmail"],
+        }
+    )
+    config["hooks"] = hooks
+    return config
 
 
 def _build_parser() -> argparse.ArgumentParser:

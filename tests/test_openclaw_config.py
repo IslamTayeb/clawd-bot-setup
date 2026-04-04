@@ -3,9 +3,9 @@ from clawd_ops.openclaw_config import build_openclaw_config
 
 def _build_config(tmp_path, extra_env=None):
     workspace = tmp_path / "workspace"
-    workspace.mkdir()
+    workspace.mkdir(exist_ok=True)
     python_exec = workspace / ".venv" / "bin" / "python"
-    python_exec.parent.mkdir(parents=True)
+    python_exec.parent.mkdir(parents=True, exist_ok=True)
     python_exec.write_text("", encoding="utf-8")
     env = {
         "TELEGRAM_TOKEN": "123:abc",
@@ -14,20 +14,34 @@ def _build_config(tmp_path, extra_env=None):
     }
     if extra_env:
         env.update(extra_env)
-    return build_openclaw_config(env, workspace=str(workspace), python_exec=str(python_exec)), str(python_exec)
+    return build_openclaw_config(
+        env, workspace=str(workspace), python_exec=str(python_exec)
+    ), str(python_exec)
 
 
 def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
-    config, python_exec = _build_config(tmp_path, {
-        "BEDROCK_MODEL_ID": "us.anthropic.claude-opus-4-6-v1",
-        "BOT_TIMEZONE": "America/New_York",
-    })
+    config, python_exec = _build_config(
+        tmp_path,
+        {
+            "BEDROCK_MODEL_ID": "us.anthropic.claude-opus-4-6-v1",
+            "BOT_TIMEZONE": "America/New_York",
+        },
+    )
 
     assert config["models"]["bedrockDiscovery"]["enabled"] is False
-    assert config["agents"]["defaults"]["model"]["primary"] == "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+    assert (
+        config["agents"]["defaults"]["model"]["primary"]
+        == "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+    )
     assert config["tools"]["alsoAllow"] == ["clawd-obsidian", "exec"]
-    assert config["agents"]["list"][0]["tools"]["alsoAllow"] == ["clawd-obsidian", "exec"]
-    assert config["plugins"]["entries"]["clawd-obsidian"]["config"]["pythonExec"] == python_exec
+    assert config["agents"]["list"][0]["tools"]["alsoAllow"] == [
+        "clawd-obsidian",
+        "exec",
+    ]
+    assert (
+        config["plugins"]["entries"]["clawd-obsidian"]["config"]["pythonExec"]
+        == python_exec
+    )
     assert config["session"]["resetTriggers"] == ["/new", "/reset", "/hardstop"]
     assert config["tools"]["media"]["audio"]["echoTranscript"] is True
     assert config["tools"]["media"]["audio"]["echoFormat"] == "Heard:\n{transcript}"
@@ -56,3 +70,17 @@ def test_build_openclaw_config_has_tts(tmp_path):
     assert tts["provider"] == "openai"
     assert tts["openai"]["model"] == "gpt-4o-mini-tts"
     assert tts["edge"]["enabled"] is True
+
+
+def test_build_openclaw_config_has_gmail_hooks(tmp_path):
+    config, _ = _build_config(tmp_path)
+
+    assert config["hooks"] == {
+        "enabled": True,
+        "token": "change-me",
+        "path": "/hooks",
+        "presets": ["gmail"],
+    }
+
+    config, _ = _build_config(tmp_path, {"OPENCLAW_HOOK_TOKEN": "  hook-secret  "})
+    assert config["hooks"]["token"] == "hook-secret"
