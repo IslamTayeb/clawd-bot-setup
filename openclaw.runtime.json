@@ -60,7 +60,7 @@
         "identity": {
           "name": "Clawd",
           "theme": "concise Obsidian workflow assistant",
-          "emoji": "\ud83e\udd9e"
+          "emoji": "🦞"
         },
         "tools": {
           "alsoAllow": [
@@ -82,10 +82,6 @@
         "enabled": true,
         "maxBytes": 20971520,
         "models": [
-          {
-            "provider": "openai",
-            "model": "gpt-4o-mini-transcribe"
-          },
           {
             "type": "cli",
             "command": "/home/ec2-user/clawd-bot/.venv/bin/python",
@@ -163,24 +159,6 @@
   },
   "meta": {
     "lastTouchedVersion": "2026.3.8",
-    "lastTouchedAt": "2026-04-04T09:04:38.624Z"
-  },
-  "messages": {
-    "tts": {
-      "auto": "tagged",
-      "provider": "openai",
-      "openai": {
-        "model": "gpt-4o-mini-tts",
-        "voice": "alloy"
-      },
-      "edge": {
-        "enabled": true,
-        "voice": "en-US-GuyNeural",
-        "lang": "en-US"
-      },
-      "modelOverrides": {
-        "enabled": true
-      }
-    }
+    "lastTouchedAt": "2026-04-04T09:08:10.755Z"
   }
 }
