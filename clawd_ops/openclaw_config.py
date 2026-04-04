@@ -126,14 +126,36 @@ def build_openclaw_config(
                     "echoFormat": "Heard:\n{transcript}",
                     "models": [
                         {
+                            "provider": "openai",
+                            "model": "gpt-4o-mini-transcribe",
+                        },
+                        {
                             "type": "cli",
                             "command": python_path,
                             "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
                             "timeoutSeconds": transcribe_timeout_seconds,
-                        }
+                        },
                     ],
                 }
             },
+        },
+        "messages": {
+            "tts": {
+                "auto": "tagged",
+                "provider": "openai",
+                "openai": {
+                    "model": "gpt-4o-mini-tts",
+                    "voice": "alloy",
+                },
+                "edge": {
+                    "enabled": True,
+                    "voice": "en-US-GuyNeural",
+                    "lang": "en-US",
+                },
+                "modelOverrides": {
+                    "enabled": True,
+                },
+            }
         },
         "agents": {
             "defaults": {
