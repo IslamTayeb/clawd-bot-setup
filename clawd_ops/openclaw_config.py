@@ -43,6 +43,17 @@ def build_openclaw_config(
     # plus shell execution so bundled CLI-based skills like GitHub can run.
     additional_tools = ["clawd-obsidian", "exec"]
     openai_key = env.get("OPENAI_API_KEY", "").strip()
+    openai_provider = (
+        {
+            "openai": {
+                "baseUrl": "https://api.openai.com/v1",
+                "apiKey": openai_key,
+                "models": [],
+            }
+        }
+        if openai_key
+        else {}
+    )
 
     config = {
         "gateway": {
@@ -85,9 +96,7 @@ def build_openclaw_config(
                 "defaultMaxTokens": 8192,
             },
             "providers": {
-                **({
-                    "openai": {"apiKey": openai_key}
-                } if openai_key else {}),
+                **openai_provider,
                 "amazon-bedrock": {
                     "baseUrl": f"https://bedrock-runtime.{region}.amazonaws.com",
                     "api": "bedrock-converse-stream",
@@ -108,7 +117,7 @@ def build_openclaw_config(
                             "maxTokens": 8192,
                         }
                     ],
-                }
+                },
             },
         },
         "plugins": {

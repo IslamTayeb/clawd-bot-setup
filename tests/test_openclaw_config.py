@@ -72,6 +72,18 @@ def test_build_openclaw_config_has_tts(tmp_path):
     assert tts["edge"]["enabled"] is True
 
 
+def test_build_openclaw_config_openai_provider_is_conditional(tmp_path):
+    config, _ = _build_config(tmp_path)
+    assert "openai" not in config["models"]["providers"]
+
+    config, _ = _build_config(tmp_path, {"OPENAI_API_KEY": "sk-test"})
+    assert config["models"]["providers"]["openai"] == {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "sk-test",
+        "models": [],
+    }
+
+
 def test_build_openclaw_config_has_gmail_hooks(tmp_path):
     config, _ = _build_config(tmp_path)
 
