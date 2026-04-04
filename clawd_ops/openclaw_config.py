@@ -155,7 +155,7 @@ def build_openclaw_config(
         },
         "messages": {
             "tts": {
-                "auto": "tagged",
+                "auto": "always",
                 "provider": "openai",
                 "openai": {
                     "model": "gpt-4o-mini-tts",
