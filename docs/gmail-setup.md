@@ -159,3 +159,42 @@ Repeat that command for each Gmail account you want wired into OpenClaw.
 - Placeholder only: `.env.example` now includes `OPENCLAW_HOOK_TOKEN=`.
 - The generated config falls back to `change-me` if the hook token is unset. Replace that with a real secret before exposing hooks.
 - The gateway will only auto-manage the Gmail watcher after `openclaw webhooks gmail setup` has written the `hooks.gmail` account config.
+
+## 9. Duke email / SSO findings
+
+Duke email is not Gmail. Duke OIT documents it as Microsoft 365 / Exchange Online.
+
+What that means:
+
+- `gog` is the right tool for Gmail accounts.
+- `gog` is not the right tool for a Duke mailbox.
+- Apple Mail works because it adds the account as `Exchange`, then redirects through Microsoft modern authentication and Duke's NetID + MFA login.
+
+Confirmed Duke references:
+
+- Microsoft 365 service page: `https://oit.duke.edu/service/microsoft-365-formerly-office-365/`
+- Apple Mail setup: `https://oit.duke.edu/help/articles/kb0014579/`
+- GNOME Evolution modern auth setup: `https://oit.duke.edu/help/articles/kb0032012/`
+
+Useful details from Duke's Evolution guide:
+
+- Protocol family: Exchange Web Services, not Gmail
+- Host URL: `https://outlook.office365.com/EWS/Exchange.asmx`
+- Auth mode: `OAuth2 (Office365)`
+- Duke-documented Office365 OAuth application ID: `20460e5d-ce91-49af-a3a5-70b6be7486d1`
+- Login then redirects to Duke Shibboleth / NetID auth
+
+If you want OpenClaw automation for Duke mail later, the likely directions are:
+
+1. Build a separate Microsoft 365 / Exchange integration.
+2. Use Microsoft OAuth2 against Exchange Online or Microsoft Graph.
+3. Treat Duke as a different project from the Gmail + `gog` integration.
+
+For raw IMAP/SMTP OAuth2, Microsoft documents the required scopes here:
+
+- `https://outlook.office.com/IMAP.AccessAsUser.All`
+- `https://outlook.office.com/SMTP.Send`
+
+Reference: `https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth`
+
+Important caveat: Microsoft-style OAuth app registration or tenant consent may be required for a true programmatic Duke integration. That is separate from the Gmail setup in this document.
