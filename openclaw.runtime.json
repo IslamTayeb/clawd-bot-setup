@@ -168,7 +168,11 @@
   "messages": {
     "tts": {
       "auto": "tagged",
-      "provider": "edge",
+      "provider": "openai",
+      "openai": {
+        "model": "gpt-4o-mini-tts",
+        "voice": "alloy"
+      },
       "edge": {
         "enabled": true,
         "voice": "en-US-GuyNeural",
