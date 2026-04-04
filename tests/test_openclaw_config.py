@@ -32,19 +32,20 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
     assert config["tools"]["media"]["audio"]["echoTranscript"] is True
     assert config["tools"]["media"]["audio"]["echoFormat"] == "Heard:\n{transcript}"
 
-    # Whisper is primary (index 0), CLI fallback is index 1
+    # Whisper only (no CLI fallback)
     models = config["tools"]["media"]["audio"]["models"]
+    assert len(models) == 1
     assert models[0]["provider"] == "openai"
     assert models[0]["model"] == "gpt-4o-mini-transcribe"
-    assert models[1]["args"] == ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"]
-    assert models[1]["timeoutSeconds"] == 1800
 
 
-def test_build_openclaw_config_respects_transcribe_timeout_override(tmp_path):
-    config, _ = _build_config(tmp_path, {"TRANSCRIBE_TIMEOUT_SECONDS": "2400"})
+def test_build_openclaw_config_whisper_only(tmp_path):
+    config, _ = _build_config(tmp_path)
 
-    # CLI fallback is index 1
-    assert config["tools"]["media"]["audio"]["models"][1]["timeoutSeconds"] == 2400
+    # Only Whisper, no CLI fallback
+    models = config["tools"]["media"]["audio"]["models"]
+    assert len(models) == 1
+    assert models[0]["provider"] == "openai"
 
 
 def test_build_openclaw_config_has_tts(tmp_path):

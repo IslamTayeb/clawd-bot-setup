@@ -129,12 +129,6 @@ def build_openclaw_config(
                             "provider": "openai",
                             "model": "gpt-4o-mini-transcribe",
                         },
-                        {
-                            "type": "cli",
-                            "command": python_path,
-                            "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
-                            "timeoutSeconds": transcribe_timeout_seconds,
-                        },
                     ],
                 }
             },
