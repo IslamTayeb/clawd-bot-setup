@@ -62,7 +62,7 @@ def build_openclaw_config(
             "auth": {"mode": "none"},
         },
         "logging": {
-            "level": "info",
+            "level": "debug",
             "consoleLevel": "info",
             "consoleStyle": "pretty",
             "redactSensitive": "tools",
@@ -155,7 +155,7 @@ def build_openclaw_config(
         },
         "messages": {
             "tts": {
-                "auto": "tagged",
+                "auto": "always",
                 "provider": "openai",
                 "openai": {
                     "model": "gpt-4o-mini-tts",
