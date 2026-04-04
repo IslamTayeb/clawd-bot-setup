@@ -35,10 +35,11 @@ The task-provided command was checked first:
 which gog || npm install -g gogcli
 ```
 
-Current result on this machine:
+Result from this setup pass:
 
-- `which gog` returned no path.
 - `npm install -g gogcli` failed with `404 Not Found`; `gogcli` is not published on npm here.
+- `gog` was then installed locally with `brew install gogcli`.
+- `gog` was also installed on the EC2 host from the official `gogcli_0.12.0_linux_arm64.tar.gz` release archive.
 
 Supported install paths from `https://gogcli.sh` are:
 
@@ -61,13 +62,13 @@ For Amazon Linux, building from source is the documented fallback if Homebrew is
 
 Tailscale Funnel is the supported public HTTPS endpoint for Gmail Pub/Sub pushes.
 
-Current check result on this machine:
+Current check result during this setup pass:
 
 ```bash
 which tailscale
 ```
 
-Result: no path returned, so `tailscale` is not currently installed here.
+Result: no path returned locally, and the EC2 host also does not currently have `tailscale` installed.
 
 Before Gmail Pub/Sub can work on the EC2 host, install Tailscale there, log in, and confirm Funnel prerequisites. OpenClaw's Gmail Pub/Sub docs explicitly call out Tailscale Funnel as the supported setup.
 
