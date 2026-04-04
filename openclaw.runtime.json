@@ -1,4 +1,8 @@
 {
+  "meta": {
+    "lastTouchedVersion": "2026.3.8",
+    "lastTouchedAt": "2026-04-04T09:15:01.237Z"
+  },
   "logging": {
     "level": "info",
     "consoleLevel": "info",
@@ -83,6 +87,10 @@
         "maxBytes": 20971520,
         "models": [
           {
+            "provider": "openai",
+            "model": "gpt-4o-mini-transcribe"
+          },
+          {
             "type": "cli",
             "command": "/home/ec2-user/clawd-bot/.venv/bin/python",
             "args": [
@@ -96,6 +104,11 @@
         "echoTranscript": true,
         "echoFormat": "Heard:\n{transcript}"
       }
+    }
+  },
+  "messages": {
+    "tts": {
+      "auto": "tagged"
     }
   },
   "commands": {
@@ -156,9 +169,5 @@
         }
       }
     }
-  },
-  "meta": {
-    "lastTouchedVersion": "2026.3.8",
-    "lastTouchedAt": "2026-04-04T09:08:10.755Z"
   }
 }
