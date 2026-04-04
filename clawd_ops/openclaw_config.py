@@ -42,6 +42,7 @@ def build_openclaw_config(
     # Keep the agent on the minimal tool profile, but allow the workspace bridge
     # plus shell execution so bundled CLI-based skills like GitHub can run.
     additional_tools = ["clawd-obsidian", "exec"]
+    openai_key = env.get("OPENAI_API_KEY", "").strip()
 
     config = {
         "gateway": {
@@ -84,6 +85,9 @@ def build_openclaw_config(
                 "defaultMaxTokens": 8192,
             },
             "providers": {
+                **({
+                    "openai": {"apiKey": openai_key}
+                } if openai_key else {}),
                 "amazon-bedrock": {
                     "baseUrl": f"https://bedrock-runtime.{region}.amazonaws.com",
                     "api": "bedrock-converse-stream",
