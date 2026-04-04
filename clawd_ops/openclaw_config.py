@@ -77,6 +77,9 @@ def build_openclaw_config(
                 "defaultMaxTokens": 8192,
             },
             "providers": {
+                "openai": {
+                    "apiKey": env.get("OPENAI_API_KEY", "").strip() or None,
+                },
                 "amazon-bedrock": {
                     "baseUrl": f"https://bedrock-runtime.{region}.amazonaws.com",
                     "api": "bedrock-converse-stream",
