@@ -199,3 +199,5 @@ For raw IMAP/SMTP OAuth2, Microsoft documents the required scopes here:
 Reference: `https://learn.microsoft.com/en-us/exchange/client-developer/legacy-protocols/how-to-authenticate-an-imap-pop-smtp-application-by-using-oauth`
 
 Important caveat: Microsoft-style OAuth app registration or tenant consent may be required for a true programmatic Duke integration. That is separate from the Gmail setup in this document.
+
+This repo now has a separate Duke-specific guide at `docs/duke-exchange-setup.md`.

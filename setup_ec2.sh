@@ -239,6 +239,29 @@ Unit=clawd-bot-repo-sync.service
 WantedBy=timers.target
 SERVICEEOF
 
+cat > /etc/systemd/system/clawd-bot-duke-exchange.service <<'SERVICEEOF'
+[Unit]
+Description=Clawd Duke Exchange watcher
+After=network-online.target clawd-bot.service
+Wants=network-online.target clawd-bot.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/clawd-bot
+Environment=HOME=/home/ec2-user
+Environment=OPENCLAW_STATE_DIR=/home/ec2-user/.openclaw
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ec2-user/clawd-bot/.venv/bin
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/ec2-user/clawd-bot/.env
+ExecStart=/home/ec2-user/clawd-bot/.venv/bin/python -m clawd_ops.exchange watch
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+
 systemctl daemon-reload
 systemctl enable --now clawd-bot-repo-sync.timer
 
@@ -248,6 +271,14 @@ if grep -Eq '^TELEGRAM_TOKEN=.+' "$PROJECT_DIR/.env" && grep -Eq '^ALLOWED_USER_
 else
     systemctl disable clawd-bot >/dev/null 2>&1 || true
     echo "=== Bot service left disabled: TELEGRAM_TOKEN or ALLOWED_USER_ID missing ==="
+fi
+
+if grep -Eqi '^DUKE_EXCHANGE_ENABLED=(1|true|yes|on)$' "$PROJECT_DIR/.env"; then
+    systemctl enable clawd-bot-duke-exchange
+    echo "=== Duke Exchange watcher enabled ==="
+else
+    systemctl disable clawd-bot-duke-exchange >/dev/null 2>&1 || true
+    echo "=== Duke Exchange watcher left disabled: set DUKE_EXCHANGE_ENABLED=true after auth ==="
 fi
 
 echo "=== Setup complete ==="
