@@ -1,0 +1,30 @@
+{
+  "tools": {
+    "media": {
+      "audio": {
+        "models": [
+          { "provider": "openai", "model": "gpt-4o-mini-transcribe" },
+          { "type": "cli", "command": "/home/ec2-user/clawd-bot/.venv/bin/python", "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"], "timeoutSeconds": 1800 }
+        ]
+      }
+    }
+  },
+  "messages": {
+    "tts": {
+      "auto": "tagged",
+      "provider": "openai",
+      "openai": {
+        "model": "gpt-4o-mini-tts",
+        "voice": "alloy"
+      },
+      "edge": {
+        "enabled": true,
+        "voice": "en-US-GuyNeural",
+        "lang": "en-US"
+      },
+      "modelOverrides": {
+        "enabled": true
+      }
+    }
+  }
+}
