@@ -18,6 +18,7 @@ Important limits for this pass:
 - Do not edit `openclaw.runtime.json` directly. It is regenerated from `clawd_ops/openclaw_config.py` on every service start.
 - Do not run `gog auth ...` from automation here. Those commands need user OAuth approval.
 - Non-Gmail accounts (Exchange/IMAP/school/other providers) are out of scope here. To bring those into this flow later, forward them into a Gmail inbox first.
+- Some school-managed inboxes may require provider-specific OAuth2 and may block plain IMAP or forwarding. Duke email should be treated as a separate OAuth2 integration, not assumed to fit the Gmail-forwarding fallback.
 
 References:
 
@@ -127,7 +128,7 @@ gog auth add school@gmail.com --services gmail,calendar
 gog auth add medschool@gmail.com --services gmail,calendar
 ```
 
-Start with Gmail accounts only. Keep non-Gmail inboxes out of this flow until they are forwarded into Gmail.
+Start with Gmail accounts only. Keep non-Gmail inboxes out of this flow until you confirm they support a workable forwarding or OAuth2 path.
 
 ## 7. Configure OpenClaw Gmail webhooks per account
 
