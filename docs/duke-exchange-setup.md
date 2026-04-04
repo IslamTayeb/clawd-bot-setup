@@ -79,6 +79,7 @@ DUKE_EXCHANGE_TENANT=organizations
 DUKE_EXCHANGE_POLL_SECONDS=60
 DUKE_EXCHANGE_INCLUDE_BODY=false
 DUKE_EXCHANGE_BODY_MAX_CHARS=1200
+DUKE_EXCHANGE_NOTIFY_MODE=important
 ```
 
 Optional overrides:
@@ -89,6 +90,9 @@ DUKE_EXCHANGE_SYNC_STATE_PATH=
 DUKE_EXCHANGE_DELIVER_CHANNEL=telegram
 DUKE_EXCHANGE_DELIVER_TO=
 DUKE_EXCHANGE_HOOK_URL=http://127.0.0.1:18789/hooks/agent
+DUKE_EXCHANGE_ALWAYS_NOTIFY_SENDERS=
+DUKE_EXCHANGE_NEVER_NOTIFY_SENDERS=
+DUKE_EXCHANGE_TRACKED_ITEM_LIMIT=200
 ```
 
 Notes:
@@ -96,6 +100,8 @@ Notes:
 - Hook auth uses `OPENCLAW_HOOK_TOKEN`.
 - If `DUKE_EXCHANGE_DELIVER_TO` is unset, the sidecar falls back to `ALLOWED_USER_ID`.
 - If no explicit delivery target exists, OpenClaw hook delivery falls back to the last route.
+- `DUKE_EXCHANGE_NOTIFY_MODE=important` is the conservative default. Bulk mail, newsletters, digests, routine confirmations, and generic opportunity blasts are suppressed unless you explicitly allowlist a sender.
+- Use `DUKE_EXCHANGE_ALWAYS_NOTIFY_SENDERS` and `DUKE_EXCHANGE_NEVER_NOTIFY_SENDERS` as comma-separated sender substrings for ad hoc tuning.
 
 ## One-time auth
 
@@ -152,9 +158,10 @@ Long-running watcher:
 
 First run behavior:
 
-- The watcher bootstraps sync state from the current inbox.
+- The watcher starts from the current inbox head and records a recent-message watermark.
 - Existing messages are not emitted on bootstrap.
-- Only later changes trigger OpenClaw hook events.
+- Only later messages trigger OpenClaw hook events.
+- Older `sync_state` files from the earlier EWS sync approach are treated as stale and replaced by the recent-message watermark automatically.
 
 ## Systemd service
 

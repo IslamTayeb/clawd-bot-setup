@@ -36,6 +36,12 @@ class InvalidSyncStateError(ExchangeError):
 
 
 @dataclass
+class ExchangeItemRef:
+    item_id: str
+    change_key: str
+
+
+@dataclass
 class ExchangeMessage:
     item_id: str
     change_key: str
@@ -85,6 +91,93 @@ class ExchangeConfig:
     max_changes: int
     include_body: bool
     body_max_chars: int
+    notify_mode: str
+    always_notify_senders: tuple[str, ...]
+    never_notify_senders: tuple[str, ...]
+    tracked_item_limit: int
+
+
+NEWSLETTER_HINTS = (
+    "newsletter",
+    "digest",
+    "roundup",
+    "daily",
+    "weekly",
+    "monthly",
+    "bulletin",
+    "community engagement",
+    "eco-update",
+    "announcement",
+    "campus events",
+    "student life",
+)
+AUTOMATED_SENDER_HINTS = (
+    "no-reply",
+    "noreply",
+    "do-not-reply",
+    "donotreply",
+    "notifications",
+    "notification",
+    "digest",
+    "newsletter",
+    "listserv",
+    "support",
+    "unlock",
+)
+ROUTINE_HINTS = (
+    "receipt",
+    "confirmation",
+    "welcome",
+    "newsletter",
+    "digest",
+    "roundup",
+    "announcement",
+)
+SECURITY_HINTS = (
+    "security alert",
+    "suspicious",
+    "password reset",
+    "sign-in",
+    "sign in",
+    "mfa",
+    "multi-factor",
+    "two-factor",
+    "2fa",
+    "account locked",
+)
+ACTION_HINTS = (
+    "deadline",
+    "due",
+    "respond",
+    "reply",
+    "rsvp",
+    "complete",
+    "submit",
+    "review",
+    "register",
+    "appointment",
+    "meeting",
+    "interview",
+    "offer",
+    "decision",
+    "approval",
+    "signature",
+    "sign this",
+)
+OPPORTUNITY_HINTS = (
+    "apply",
+    "application",
+    "applications open",
+    "internship",
+    "funding",
+    "fellowship",
+    "scholarship",
+    "grant",
+    "research",
+    "opportunity",
+    "career",
+    "job",
+)
 
 
 def _state_root() -> Path:
@@ -109,6 +202,10 @@ def _env_flag(name: str, default: bool) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _csv_values(raw: str) -> tuple[str, ...]:
+    return tuple(part.strip().lower() for part in raw.split(",") if part.strip())
+
+
 def _ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -128,6 +225,21 @@ def _text(node: ET.Element | None) -> str:
     if node is None or node.text is None:
         return ""
     return node.text.strip()
+
+
+def _state_payload(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"known_item_ids": []}
+    payload = _read_json(path)
+    known_item_ids = payload.get("known_item_ids", [])
+    if isinstance(known_item_ids, list):
+        payload["known_item_ids"] = [
+            str(item_id) for item_id in known_item_ids if item_id
+        ]
+        return payload
+
+    # Older sync-state files can be discarded safely because the user wants to start from now.
+    return {"known_item_ids": []}
 
 
 def _oauth_token_url(tenant: str) -> str:
@@ -386,6 +498,30 @@ def _parse_get_item_response(
     return items
 
 
+def _parse_find_item_refs_response(root: ET.Element) -> list[ExchangeItemRef]:
+    response = root.find(".//m:FindItemResponseMessage", NS)
+    if response is None:
+        raise ExchangeError(
+            "EWS find-item response did not include FindItemResponseMessage."
+        )
+    code = _text(response.find("m:ResponseCode", NS))
+    if code != "NoError":
+        raise ExchangeError(_text(response.find("m:MessageText", NS)) or code)
+
+    refs: list[ExchangeItemRef] = []
+    for node in response.findall(".//t:Items/*", NS):
+        item_id_node = node.find("t:ItemId", NS)
+        if item_id_node is None:
+            continue
+        refs.append(
+            ExchangeItemRef(
+                item_id=item_id_node.attrib.get("Id", ""),
+                change_key=item_id_node.attrib.get("ChangeKey", ""),
+            )
+        )
+    return refs
+
+
 def _parse_find_item_response(
     root: ET.Element, *, body_max_chars: int
 ) -> list[ExchangeMessage]:
@@ -455,7 +591,7 @@ def _build_find_item_request(limit: int) -> str:
     return f"""
 <m:FindItem Traversal="Shallow">
   <m:ItemShape>
-    <t:BaseShape>Default</t:BaseShape>
+    <t:BaseShape>IdOnly</t:BaseShape>
   </m:ItemShape>
   <m:IndexedPageItemView MaxEntriesReturned="{limit}" Offset="0" BasePoint="Beginning" />
   <m:SortOrder>
@@ -468,6 +604,39 @@ def _build_find_item_request(limit: int) -> str:
   </m:ParentFolderIds>
 </m:FindItem>
 """.strip()
+
+
+def _fetch_recent_messages(
+    config: ExchangeConfig, *, limit: int
+) -> list[ExchangeMessage]:
+    access_token = get_access_token(config)
+    root = _post_ews(config, access_token, _build_find_item_request(limit))
+    refs = _parse_find_item_refs_response(root)
+    if not refs:
+        return []
+
+    ref_messages = [
+        ExchangeMessage(
+            item_id=ref.item_id,
+            change_key=ref.change_key,
+            subject="",
+            received_at="",
+            sender_name="",
+            sender_email="",
+            is_read=None,
+        )
+        for ref in refs
+    ]
+    details_root = _post_ews(
+        config,
+        access_token,
+        _build_get_item_request(ref_messages, include_body=config.include_body),
+    )
+    detailed_messages = _parse_get_item_response(
+        details_root, body_max_chars=config.body_max_chars
+    )
+    by_id = {message.item_id: message for message in detailed_messages}
+    return [by_id[ref.item_id] for ref in refs if ref.item_id in by_id]
 
 
 def sync_once(config: ExchangeConfig) -> dict[str, Any]:
@@ -514,18 +683,100 @@ def sync_once(config: ExchangeConfig) -> dict[str, Any]:
 
 
 def probe_inbox(config: ExchangeConfig, *, limit: int) -> dict[str, Any]:
-    access_token = get_access_token(config)
-    root = _post_ews(config, access_token, _build_find_item_request(limit))
-    items = _parse_find_item_response(root, body_max_chars=0)
+    items = _fetch_recent_messages(config, limit=limit)
     return {
         "email": config.email,
         "messages": [asdict(item) for item in items],
     }
 
 
-def _build_hook_message(config: ExchangeConfig, message: ExchangeMessage) -> str:
+def _sender_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bool:
+    sender_blob = f"{message.sender_name} {message.sender_email}".lower()
+    return any(pattern in sender_blob for pattern in patterns)
+
+
+def _subject_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bool:
+    subject = message.subject.lower()
+    return any(pattern in subject for pattern in patterns)
+
+
+def _body_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bool:
+    body = message.body.lower()
+    return any(pattern in body for pattern in patterns)
+
+
+def _is_direct_sender(message: ExchangeMessage) -> bool:
+    sender = message.sender_email.lower()
+    if not sender:
+        return False
+    return not _sender_matches_any(message, AUTOMATED_SENDER_HINTS)
+
+
+def _should_notify_message(
+    config: ExchangeConfig, message: ExchangeMessage
+) -> tuple[bool, str]:
+    if config.notify_mode == "off":
+        return False, "notifications disabled"
+    if config.notify_mode == "all":
+        return True, "notify-all mode"
+
+    if config.never_notify_senders and _sender_matches_any(
+        message, config.never_notify_senders
+    ):
+        return False, "sender blocklist"
+    if config.always_notify_senders and _sender_matches_any(
+        message, config.always_notify_senders
+    ):
+        return True, "sender allowlist"
+
+    has_security_signal = _subject_matches_any(
+        message, SECURITY_HINTS
+    ) or _body_matches_any(message, SECURITY_HINTS)
+    action_score = sum(
+        (
+            _subject_matches_any(message, ACTION_HINTS),
+            _body_matches_any(message, ACTION_HINTS),
+        )
+    )
+    opportunity_score = sum(
+        (
+            _subject_matches_any(message, OPPORTUNITY_HINTS),
+            _body_matches_any(message, OPPORTUNITY_HINTS),
+        )
+    )
+    looks_bulk = _sender_matches_any(message, NEWSLETTER_HINTS) or _subject_matches_any(
+        message, NEWSLETTER_HINTS
+    )
+    looks_routine = _subject_matches_any(message, ROUTINE_HINTS)
+    direct_sender = _is_direct_sender(message)
+
+    if has_security_signal:
+        return True, "security-sensitive"
+    if looks_bulk:
+        return False, "bulk or newsletter email"
+    if direct_sender and not looks_bulk and not looks_routine:
+        return True, "direct human or non-bulk sender"
+    if action_score >= 2 and not looks_bulk:
+        return True, "deadline or action required"
+    if _sender_matches_any(message, AUTOMATED_SENDER_HINTS) and not has_security_signal:
+        return False, "automated notification"
+    if looks_routine and opportunity_score == 0:
+        return False, "routine update"
+    return False, "low-signal email"
+
+
+def _build_hook_message(
+    config: ExchangeConfig, message: ExchangeMessage, *, reason: str
+) -> str:
     lines = [
-        "New Duke Exchange email.",
+        "A new Duke email passed the local importance filter.",
+        f"Why it passed: {reason}.",
+        "Reply in at most 3 short lines:",
+        "1. Why it matters",
+        "2. Deadline or action item if any",
+        '3. One suggested next step as a question, like "Want me to draft a reply?" or "Want me to add a todo?"',
+        "If it looks like an application, internship, funding, or opportunity, you may ask whether to apply or review requirements.",
+        "",
         f"Account: {config.email}",
         f"From: {message.sender_display()}",
         f"Subject: {message.subject}",
@@ -537,14 +788,16 @@ def _build_hook_message(config: ExchangeConfig, message: ExchangeMessage) -> str
     return "\n".join(lines)
 
 
-def _post_agent_hook(config: ExchangeConfig, message: ExchangeMessage) -> None:
+def _post_agent_hook(
+    config: ExchangeConfig, message: ExchangeMessage, *, reason: str
+) -> None:
     if not config.hook_token:
         raise ExchangeError(
             "OPENCLAW_HOOK_TOKEN (or --hook-token) is required for watch mode."
         )
 
     payload: dict[str, Any] = {
-        "message": _build_hook_message(config, message),
+        "message": _build_hook_message(config, message, reason=reason),
         "name": "Duke Mail",
         "wakeMode": "now",
         "deliver": True,
@@ -566,20 +819,64 @@ def _post_agent_hook(config: ExchangeConfig, message: ExchangeMessage) -> None:
     response.raise_for_status()
 
 
+def _poll_recent_messages(config: ExchangeConfig) -> dict[str, Any]:
+    messages = _fetch_recent_messages(config, limit=config.max_changes)
+    payload = _state_payload(config.sync_state_path)
+    known_item_ids = payload.get("known_item_ids", [])
+    if not known_item_ids:
+        _write_json(
+            config.sync_state_path,
+            {
+                "known_item_ids": [
+                    message.item_id
+                    for message in messages[: config.tracked_item_limit]
+                    if message.item_id
+                ]
+            },
+        )
+        return {"bootstrap": True, "created": []}
+
+    known_item_set = set(known_item_ids)
+    new_messages: list[ExchangeMessage] = []
+    for message in messages:
+        if message.item_id in known_item_set:
+            break
+        new_messages.append(message)
+
+    merged_known_ids = [message.item_id for message in messages if message.item_id]
+    merged_known_ids.extend(
+        item_id for item_id in known_item_ids if item_id not in set(merged_known_ids)
+    )
+    _write_json(
+        config.sync_state_path,
+        {"known_item_ids": merged_known_ids[: config.tracked_item_limit]},
+    )
+    return {
+        "bootstrap": False,
+        "created": [asdict(message) for message in reversed(new_messages)],
+    }
+
+
 def watch(config: ExchangeConfig, *, once: bool = False) -> dict[str, Any] | None:
     while True:
         try:
-            cycle = sync_once(config)
+            cycle = _poll_recent_messages(config)
             created = [ExchangeMessage(**message) for message in cycle["created"]]
             delivered = 0
+            suppressed = 0
             for message in created:
-                _post_agent_hook(config, message)
+                should_notify, reason = _should_notify_message(config, message)
+                if not should_notify:
+                    suppressed += 1
+                    continue
+                _post_agent_hook(config, message, reason=reason)
                 delivered += 1
 
             result = {
                 "bootstrap": cycle["bootstrap"],
                 "created": cycle["created"],
                 "delivered": delivered,
+                "suppressed": suppressed,
             }
             if once:
                 return result
@@ -591,7 +888,12 @@ def watch(config: ExchangeConfig, *, once: bool = False) -> dict[str, Any] | Non
                 )
             elif delivered:
                 print(
-                    f"Delivered {delivered} Duke Exchange event(s) to OpenClaw hooks.",
+                    f"Delivered {delivered} filtered Duke Exchange event(s) to OpenClaw hooks and suppressed {suppressed} routine email(s).",
+                    flush=True,
+                )
+            elif suppressed:
+                print(
+                    f"Suppressed {suppressed} routine Duke email(s).",
                     flush=True,
                 )
         except InvalidSyncStateError as exc:
@@ -643,6 +945,19 @@ def _config_from_args(args: argparse.Namespace) -> ExchangeConfig:
         if args.include_body is not None
         else _env_flag("DUKE_EXCHANGE_INCLUDE_BODY", False)
     )
+    notify_mode = (
+        (
+            args.notify_mode
+            or os.environ.get("DUKE_EXCHANGE_NOTIFY_MODE", "")
+            or "important"
+        )
+        .strip()
+        .lower()
+    )
+    if notify_mode not in {"important", "all", "off"}:
+        raise ExchangeError(
+            "DUKE_EXCHANGE_NOTIFY_MODE must be one of: important, all, off."
+        )
 
     return ExchangeConfig(
         email=email,
@@ -699,6 +1014,23 @@ def _config_from_args(args: argparse.Namespace) -> ExchangeConfig:
             ).strip()
             or "1200"
         ),
+        notify_mode=notify_mode,
+        always_notify_senders=_csv_values(
+            args.always_notify_senders
+            or os.environ.get("DUKE_EXCHANGE_ALWAYS_NOTIFY_SENDERS", "")
+        ),
+        never_notify_senders=_csv_values(
+            args.never_notify_senders
+            or os.environ.get("DUKE_EXCHANGE_NEVER_NOTIFY_SENDERS", "")
+        ),
+        tracked_item_limit=int(
+            (
+                str(args.tracked_item_limit)
+                if args.tracked_item_limit is not None
+                else os.environ.get("DUKE_EXCHANGE_TRACKED_ITEM_LIMIT", "")
+            ).strip()
+            or "200"
+        ),
     )
 
 
@@ -719,6 +1051,10 @@ def _build_parser() -> argparse.ArgumentParser:
     common.add_argument("--poll-seconds", type=int)
     common.add_argument("--max-changes", type=int)
     common.add_argument("--body-max-chars", type=int)
+    common.add_argument("--notify-mode")
+    common.add_argument("--always-notify-senders")
+    common.add_argument("--never-notify-senders")
+    common.add_argument("--tracked-item-limit", type=int)
     common.add_argument("--include-body", dest="include_body", action="store_true")
     common.add_argument("--no-include-body", dest="include_body", action="store_false")
     common.set_defaults(include_body=None)
