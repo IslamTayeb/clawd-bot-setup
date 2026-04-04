@@ -8,7 +8,11 @@ from tests.conftest import run_git
 
 
 def test_task_file_path_resolves_relative_dates(monkeypatch):
-    monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
+    )
     assert vault.task_file_path("today") == "tasks/260310.md"
     assert vault.task_file_path("yesterday") == "tasks/260309.md"
     assert vault.task_file_path("tomorrow") == "tasks/260311.md"
@@ -16,7 +20,11 @@ def test_task_file_path_resolves_relative_dates(monkeypatch):
 
 
 def test_add_todos_appends_to_existing_task_file(git_vault, monkeypatch):
-    monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
+    )
     task_path = git_vault / "tasks" / "260310.md"
     task_path.write_text("- [ ] existing\n", encoding="utf-8")
     run_git(git_vault, "add", "tasks/260310.md")
@@ -31,7 +39,11 @@ def test_add_todos_appends_to_existing_task_file(git_vault, monkeypatch):
 
 
 def test_add_todos_migrates_legacy_task_filename(git_vault, monkeypatch):
-    monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
+    )
     legacy_path = git_vault / "tasks" / "031026.md"
     preferred_path = git_vault / "tasks" / "260310.md"
     legacy_path.write_text("- [ ] legacy\n", encoding="utf-8")
@@ -43,7 +55,9 @@ def test_add_todos_migrates_legacy_task_filename(git_vault, monkeypatch):
 
     assert message == "Added 1 todo(s) to tasks/260310.md."
     assert not legacy_path.exists()
-    assert preferred_path.read_text(encoding="utf-8") == "- [ ] legacy\n- [ ] buy milk\n"
+    assert (
+        preferred_path.read_text(encoding="utf-8") == "- [ ] legacy\n- [ ] buy milk\n"
+    )
     assert run_git(git_vault, "status", "--short") == ""
 
 
@@ -90,7 +104,23 @@ def test_memory_roundtrip_does_not_require_obsidian_vault(tmp_path, monkeypatch)
 
     assert stored == "Stored memory in memory/clawd.md under Preferences."
     assert "Prefers direct recommendations" in vault.read_memory(sync=False)
-    assert vault.forget_memory("direct recommendations") == "Removed 1 memory item(s) from memory/clawd.md."
+    assert (
+        vault.forget_memory("direct recommendations")
+        == "Removed 1 memory item(s) from memory/clawd.md."
+    )
+
+
+def test_email_filter_roundtrip(git_vault):
+    stored = vault.add_email_filter("suppress_topic", "duke daily newsletter")
+
+    assert stored == "Stored email filter in memory/clawd.md under Email Filters."
+    rules = vault.list_email_filters()
+    assert rules["suppress_topic"] == ["duke daily newsletter"]
+
+    removed = vault.remove_email_filter("duke daily", kind="suppress_topic")
+    assert removed == "Removed 1 email filter(s) from memory/clawd.md."
+    assert vault.list_email_filters()["suppress_topic"] == []
+    assert run_git(git_vault, "status", "--short") == ""
 
 
 def test_write_note_rejects_path_escape(git_vault):
@@ -128,8 +158,12 @@ def test_git_push_recovers_non_fast_forward(git_vault, tmp_path):
     assert run_git(git_vault, "status", "--short") == ""
     remote_check = tmp_path / "check"
     run_git(tmp_path, "clone", str(tmp_path / "remote.git"), str(remote_check))
-    assert (remote_check / "personal" / "local.md").read_text(encoding="utf-8") == "local\n"
-    assert (remote_check / "personal" / "remote.md").read_text(encoding="utf-8") == "remote\n"
+    assert (remote_check / "personal" / "local.md").read_text(
+        encoding="utf-8"
+    ) == "local\n"
+    assert (remote_check / "personal" / "remote.md").read_text(
+        encoding="utf-8"
+    ) == "remote\n"
 
 
 def test_sync_with_remote_uses_merge_only(monkeypatch):
@@ -141,7 +175,9 @@ def test_sync_with_remote_uses_merge_only(monkeypatch):
 
     def fake_run_git(*args: str) -> subprocess.CompletedProcess[str]:
         commands.append(args)
-        return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
+        return subprocess.CompletedProcess(
+            args=args, returncode=0, stdout="", stderr=""
+        )
 
     monkeypatch.setattr(vault, "_git", fake_git)
     monkeypatch.setattr(vault, "_run_git", fake_run_git)

@@ -231,6 +231,34 @@ def test_should_notify_message_keeps_direct_human_mail(tmp_path):
     assert reason == "direct human or non-bulk sender"
 
 
+def test_should_notify_message_uses_memory_backed_topic_filters(monkeypatch, tmp_path):
+    config = _config(tmp_path)
+    monkeypatch.setattr(
+        exchange,
+        "list_email_filters",
+        lambda sync=False: {
+            "allow_sender": [],
+            "suppress_sender": [],
+            "allow_topic": [],
+            "suppress_topic": ["duke daily newsletter"],
+        },
+    )
+    message = exchange.ExchangeMessage(
+        item_id="item-1",
+        change_key="ck-1",
+        subject="Duke Daily newsletter: campus updates",
+        received_at="2026-04-04T10:00:00Z",
+        sender_name="Duke Daily",
+        sender_email="newsletter@duke.edu",
+        is_read=False,
+    )
+
+    should_notify, reason = exchange._should_notify_message(config, message)
+
+    assert should_notify is False
+    assert reason == "topic blocklist"
+
+
 def test_poll_recent_messages_bootstraps_without_emitting_old_mail(
     monkeypatch, tmp_path
 ):

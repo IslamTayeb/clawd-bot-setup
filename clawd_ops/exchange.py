@@ -11,6 +11,8 @@ from xml.sax.saxutils import escape
 
 import requests
 
+from clawd_ops.vault import list_email_filters
+
 SOAP_NS = "http://schemas.xmlsoap.org/soap/envelope/"
 EWS_MESSAGES_NS = "http://schemas.microsoft.com/exchange/services/2006/messages"
 EWS_TYPES_NS = "http://schemas.microsoft.com/exchange/services/2006/types"
@@ -705,6 +707,38 @@ def _body_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bo
     return any(pattern in body for pattern in patterns)
 
 
+def _topic_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bool:
+    if _subject_matches_any(message, patterns):
+        return True
+    return _body_matches_any(message, patterns)
+
+
+def _effective_filters(config: ExchangeConfig) -> dict[str, tuple[str, ...]]:
+    memory_rules = list_email_filters(sync=False)
+
+    def dedupe(*values: tuple[str, ...] | list[str]) -> tuple[str, ...]:
+        ordered: list[str] = []
+        seen: set[str] = set()
+        for group in values:
+            for value in group:
+                if value not in seen:
+                    ordered.append(value)
+                    seen.add(value)
+        return tuple(ordered)
+
+    return {
+        "allow_sender": dedupe(
+            config.always_notify_senders, tuple(memory_rules.get("allow_sender", []))
+        ),
+        "suppress_sender": dedupe(
+            config.never_notify_senders,
+            tuple(memory_rules.get("suppress_sender", [])),
+        ),
+        "allow_topic": dedupe(tuple(memory_rules.get("allow_topic", []))),
+        "suppress_topic": dedupe(tuple(memory_rules.get("suppress_topic", []))),
+    }
+
+
 def _is_direct_sender(message: ExchangeMessage) -> bool:
     sender = message.sender_email.lower()
     if not sender:
@@ -713,21 +747,31 @@ def _is_direct_sender(message: ExchangeMessage) -> bool:
 
 
 def _should_notify_message(
-    config: ExchangeConfig, message: ExchangeMessage
+    config: ExchangeConfig,
+    message: ExchangeMessage,
+    *,
+    filters: dict[str, tuple[str, ...]] | None = None,
 ) -> tuple[bool, str]:
+    filters = filters or _effective_filters(config)
     if config.notify_mode == "off":
         return False, "notifications disabled"
     if config.notify_mode == "all":
         return True, "notify-all mode"
 
-    if config.never_notify_senders and _sender_matches_any(
-        message, config.never_notify_senders
+    if filters["suppress_sender"] and _sender_matches_any(
+        message, filters["suppress_sender"]
     ):
         return False, "sender blocklist"
-    if config.always_notify_senders and _sender_matches_any(
-        message, config.always_notify_senders
+    if filters["allow_sender"] and _sender_matches_any(
+        message, filters["allow_sender"]
     ):
         return True, "sender allowlist"
+    if filters["suppress_topic"] and _topic_matches_any(
+        message, filters["suppress_topic"]
+    ):
+        return False, "topic blocklist"
+    if filters["allow_topic"] and _topic_matches_any(message, filters["allow_topic"]):
+        return True, "topic allowlist"
 
     has_security_signal = _subject_matches_any(
         message, SECURITY_HINTS
@@ -862,10 +906,13 @@ def watch(config: ExchangeConfig, *, once: bool = False) -> dict[str, Any] | Non
         try:
             cycle = _poll_recent_messages(config)
             created = [ExchangeMessage(**message) for message in cycle["created"]]
+            filters = _effective_filters(config)
             delivered = 0
             suppressed = 0
             for message in created:
-                should_notify, reason = _should_notify_message(config, message)
+                should_notify, reason = _should_notify_message(
+                    config, message, filters=filters
+                )
                 if not should_notify:
                     suppressed += 1
                     continue

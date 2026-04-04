@@ -17,6 +17,13 @@ DEFAULT_MEMORY_SECTIONS = (
     "Open Loops",
     "Reference",
 )
+EMAIL_FILTER_SECTION = "Email Filters"
+EMAIL_FILTER_KINDS = (
+    "allow_sender",
+    "suppress_sender",
+    "allow_topic",
+    "suppress_topic",
+)
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
 LEGACY_TASK_FILE_RE = re.compile(r"^\d{6}\.md$")
 
@@ -66,12 +73,16 @@ def _path_lock(lock_path: Path):
 @contextlib.contextmanager
 def _vault_lock():
     git_dir = _vault() / ".git"
-    lock_path = git_dir / "clawd-bot.lock" if git_dir.exists() else _vault() / ".clawd-bot.lock"
+    lock_path = (
+        git_dir / "clawd-bot.lock" if git_dir.exists() else _vault() / ".clawd-bot.lock"
+    )
     with _path_lock(lock_path):
         yield
 
+
 def _git_env() -> dict[str, str]:
     return {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+
 
 def _run_git(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
@@ -88,7 +99,11 @@ def _git(*args: str) -> str:
     result = _run_git(*args)
     if result.returncode != 0:
         command = shlex.join(["git", *args])
-        details = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+        details = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"exit code {result.returncode}"
+        )
         raise RuntimeError(f"{command} failed: {details}")
     return result.stdout.strip()
 
@@ -117,19 +132,33 @@ def _is_known_git_path(path: Path) -> bool:
 def _sync_with_remote(remote: str, branch: str) -> None:
     _git("fetch", remote, branch)
 
-    merge = _run_git("merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}")
+    merge = _run_git(
+        "merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}"
+    )
     if merge.returncode == 0:
         clear_conflicts("vault_sync", str(_vault()))
         return
 
     abort = _run_git("merge", "--abort")
-    if abort.returncode != 0 and "There is no merge to abort" not in (abort.stderr or abort.stdout):
+    if abort.returncode != 0 and "There is no merge to abort" not in (
+        abort.stderr or abort.stdout
+    ):
         command = shlex.join(["git", "merge", "--abort"])
-        details = abort.stderr.strip() or abort.stdout.strip() or f"exit code {abort.returncode}"
-        raise RuntimeError(f"{command} failed while cleaning up a failed merge: {details}")
+        details = (
+            abort.stderr.strip()
+            or abort.stdout.strip()
+            or f"exit code {abort.returncode}"
+        )
+        raise RuntimeError(
+            f"{command} failed while cleaning up a failed merge: {details}"
+        )
 
-    command = shlex.join(["git", "merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}"])
-    details = merge.stderr.strip() or merge.stdout.strip() or f"exit code {merge.returncode}"
+    command = shlex.join(
+        ["git", "merge", "--no-edit", "--autostash", "-X", "ours", f"{remote}/{branch}"]
+    )
+    details = (
+        merge.stderr.strip() or merge.stdout.strip() or f"exit code {merge.returncode}"
+    )
     conflict_id = report_conflict(
         kind="vault_sync",
         summary=f"Could not merge vault changes from {remote}/{branch}.",
@@ -152,7 +181,11 @@ def git_pull() -> None:
 
 def git_push(message: str, paths: list[Path] | None = None) -> None:
     if paths:
-        rel_paths = [str(path.resolve().relative_to(_vault())) for path in paths if _is_known_git_path(path)]
+        rel_paths = [
+            str(path.resolve().relative_to(_vault()))
+            for path in paths
+            if _is_known_git_path(path)
+        ]
         if rel_paths:
             _git("add", "-A", "--", *rel_paths)
         else:
@@ -190,7 +223,9 @@ def _now_label() -> str:
 
 
 def _bot_timezone():
-    timezone_name = os.environ.get("BOT_TIMEZONE", "America/New_York").strip() or "America/New_York"
+    timezone_name = (
+        os.environ.get("BOT_TIMEZONE", "America/New_York").strip() or "America/New_York"
+    )
     try:
         return ZoneInfo(timezone_name)
     except ZoneInfoNotFoundError:
@@ -265,7 +300,9 @@ def _task_paths(target_date: str = "today") -> tuple[Path, Path]:
     return preferred, legacy
 
 
-def _coalesce_task_file(target_date: str = "today", migrate_legacy: bool = False) -> Path:
+def _coalesce_task_file(
+    target_date: str = "today", migrate_legacy: bool = False
+) -> Path:
     preferred, legacy = _task_paths(target_date)
     if preferred.exists() and legacy.exists() and preferred != legacy:
         if not migrate_legacy:
@@ -345,6 +382,15 @@ def _normalize_memory_item(item: str) -> str:
     return re.sub(r"\s+", " ", item).strip()
 
 
+def _normalize_email_filter_kind(kind: str) -> str:
+    cleaned = kind.strip().lower().replace("-", "_").replace(" ", "_")
+    if cleaned not in EMAIL_FILTER_KINDS:
+        raise ValueError(
+            "kind must be one of: allow_sender, suppress_sender, allow_topic, suppress_topic"
+        )
+    return cleaned
+
+
 def _parse_memory_sections(text: str) -> dict[str, list[str]]:
     sections = {section: [] for section in DEFAULT_MEMORY_SECTIONS}
     current_section: str | None = None
@@ -365,7 +411,9 @@ def _parse_memory_sections(text: str) -> dict[str, list[str]]:
 
 def _render_memory_sections(sections: dict[str, list[str]]) -> str:
     ordered_sections = list(DEFAULT_MEMORY_SECTIONS)
-    ordered_sections.extend(section for section in sections if section not in ordered_sections)
+    ordered_sections.extend(
+        section for section in sections if section not in ordered_sections
+    )
 
     lines = [
         "# Clawd Memory",
@@ -445,7 +493,87 @@ def remember_memory(memory: str, section: str = "Preferences") -> str:
         path.write_text(_render_memory_sections(sections), encoding="utf-8")
         if _memory_in_vault(path):
             git_push(f"Update Clawd memory: {normalized_section}", [path])
-        return f"Stored memory in {_memory_path_label(path)} under {normalized_section}."
+        return (
+            f"Stored memory in {_memory_path_label(path)} under {normalized_section}."
+        )
+
+
+def list_email_filters(sync: bool = True) -> dict[str, list[str]]:
+    with _memory_lock():
+        _, existing_text = _read_memory_file(sync=sync)
+        sections = _parse_memory_sections(existing_text)
+        rules = {kind: [] for kind in EMAIL_FILTER_KINDS}
+        for item in sections.get(EMAIL_FILTER_SECTION, []):
+            if ":" not in item:
+                continue
+            raw_kind, raw_value = item.split(":", 1)
+            try:
+                kind = _normalize_email_filter_kind(raw_kind)
+            except ValueError:
+                continue
+            value = _normalize_memory_item(raw_value).lower()
+            if value:
+                rules[kind].append(value)
+        return rules
+
+
+def add_email_filter(kind: str, pattern: str) -> str:
+    with _memory_lock():
+        normalized_kind = _normalize_email_filter_kind(kind)
+        normalized_pattern = _normalize_memory_item(pattern)
+        if not normalized_pattern:
+            raise ValueError("pattern must not be empty")
+
+        path, existing_text = _read_memory_file(sync=True)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        sections = _parse_memory_sections(existing_text)
+        target_items = sections.setdefault(EMAIL_FILTER_SECTION, [])
+        entry = f"{normalized_kind}: {normalized_pattern}"
+        if any(existing.casefold() == entry.casefold() for existing in target_items):
+            return f"Email filter already stored in {_memory_path_label(path)}."
+
+        target_items.append(entry)
+        path.write_text(_render_memory_sections(sections), encoding="utf-8")
+        if _memory_in_vault(path):
+            git_push("Update Clawd email filters", [path])
+        return f"Stored email filter in {_memory_path_label(path)} under {EMAIL_FILTER_SECTION}."
+
+
+def remove_email_filter(pattern: str, kind: str = "") -> str:
+    with _memory_lock():
+        cleaned_pattern = _normalize_memory_item(pattern)
+        if not cleaned_pattern:
+            raise ValueError("pattern must not be empty")
+
+        normalized_kind = _normalize_email_filter_kind(kind) if kind.strip() else ""
+        path, existing_text = _read_memory_file(sync=True)
+        if not existing_text.strip():
+            return f"No memory stored in {_memory_path_label(path)}."
+
+        sections = _parse_memory_sections(existing_text)
+        removed_count = 0
+        kept_items = []
+        for item in sections.get(EMAIL_FILTER_SECTION, []):
+            raw_kind, _, raw_value = item.partition(":")
+            item_kind = raw_kind.strip().lower().replace("-", "_").replace(" ", "_")
+            item_value = _normalize_memory_item(raw_value)
+            kind_matches = not normalized_kind or item_kind == normalized_kind
+            value_matches = cleaned_pattern.casefold() in item_value.casefold()
+            if kind_matches and value_matches:
+                removed_count += 1
+                continue
+            kept_items.append(item)
+        sections[EMAIL_FILTER_SECTION] = kept_items
+
+        if removed_count == 0:
+            return f"No email filter matched '{cleaned_pattern}' in {_memory_path_label(path)}."
+
+        path.write_text(_render_memory_sections(sections), encoding="utf-8")
+        if _memory_in_vault(path):
+            git_push("Prune Clawd email filters", [path])
+        return (
+            f"Removed {removed_count} email filter(s) from {_memory_path_label(path)}."
+        )
 
 
 def forget_memory(query: str, section: str = "") -> str:
@@ -479,7 +607,9 @@ def forget_memory(query: str, section: str = "") -> str:
         path.write_text(_render_memory_sections(sections), encoding="utf-8")
         if _memory_in_vault(path):
             git_push("Prune Clawd memory", [path])
-        return f"Removed {removed_count} memory item(s) from {_memory_path_label(path)}."
+        return (
+            f"Removed {removed_count} memory item(s) from {_memory_path_label(path)}."
+        )
 
 
 def _note_commit_message(action: str, path: Path) -> str:
@@ -502,7 +632,9 @@ def write_note(path: str, content: str, mode: str = "overwrite") -> str:
             separator = "\n" if existing and not existing.endswith("\n") else ""
             updated = f"{existing}{separator}{content}"
         elif normalized_mode == "prepend":
-            separator = "\n" if content and not content.endswith("\n") and existing else ""
+            separator = (
+                "\n" if content and not content.endswith("\n") and existing else ""
+            )
             updated = f"{content}{separator}{existing}"
         else:
             raise ValueError("mode must be one of: overwrite, append, prepend")
@@ -537,7 +669,9 @@ def add_todos(items: list[str], target_date: str = "today") -> str:
         for item in items:
             if item.startswith("\t"):
                 indent = item[: len(item) - len(item.lstrip("\t"))]
-                lines.append(f"{indent}- [ ] {_normalize_memory_item(item.lstrip(chr(9)))}")
+                lines.append(
+                    f"{indent}- [ ] {_normalize_memory_item(item.lstrip(chr(9)))}"
+                )
             else:
                 lines.append(f"- [ ] {_normalize_memory_item(item)}")
 
@@ -590,8 +724,12 @@ def migrate_task_filenames(sync: bool = True) -> str:
                 existing_text = target.read_text(encoding="utf-8").strip()
                 legacy_text = path.read_text(encoding="utf-8").strip()
                 if existing_text != legacy_text and legacy_text:
-                    merged_parts = [part for part in (existing_text, legacy_text) if part]
-                    target.write_text("\n\n".join(merged_parts) + "\n", encoding="utf-8")
+                    merged_parts = [
+                        part for part in (existing_text, legacy_text) if part
+                    ]
+                    target.write_text(
+                        "\n\n".join(merged_parts) + "\n", encoding="utf-8"
+                    )
                 path.unlink()
             else:
                 path.rename(target)
@@ -614,7 +752,9 @@ def save_research(title: str, content: str) -> str:
 
         research_dir = _resolve_in_vault("research")
         research_dir.mkdir(parents=True, exist_ok=True)
-        slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "research-note"
+        slug = (
+            re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "research-note"
+        )
         target = research_dir / f"{slug}.md"
 
         if target.exists():

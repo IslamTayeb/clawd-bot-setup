@@ -8,12 +8,22 @@ from clawd_ops.audio import transcribe_voice
 from clawd_ops.app_repo import sync_app_repo
 from clawd_ops.brain import process_message, tool_specs
 from clawd_ops.conflicts import list_conflicts, read_conflict, resolve_conflict
+from clawd_ops.google_auth import (
+    finish_google_auth,
+    list_google_auth_accounts,
+    list_google_auth_credentials,
+    set_google_auth_credentials,
+    start_google_auth,
+)
 from clawd_ops.search import browse_web, search_papers
 from clawd_ops.vault import (
     add_todos,
+    add_email_filter,
     forget_memory,
     list_files,
+    list_email_filters,
     memory_path,
+    remove_email_filter,
     read_memory,
     read_notes,
     read_task_list,
@@ -35,9 +45,14 @@ def _tool_manifest():
 
 COMMANDS: dict[str, Callable[..., object]] = {
     "add_todos": add_todos,
+    "add_email_filter": add_email_filter,
     "browse_web": browse_web,
+    "finish_google_auth": finish_google_auth,
     "forget_memory": forget_memory,
     "list_conflicts": list_conflicts,
+    "list_google_auth_accounts": list_google_auth_accounts,
+    "list_google_auth_credentials": list_google_auth_credentials,
+    "list_email_filters": list_email_filters,
     "list_files": list_files,
     "memory_path": memory_path,
     "process_message": process_message,
@@ -45,10 +60,13 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "read_memory": read_memory,
     "read_notes": read_notes,
     "read_task_list": read_task_list,
+    "remove_email_filter": remove_email_filter,
     "remember_memory": remember_memory,
     "resolve_conflict": resolve_conflict,
     "save_research": save_research,
     "search_papers": search_papers,
+    "set_google_auth_credentials": set_google_auth_credentials,
+    "start_google_auth": start_google_auth,
     "sync_app_repo": sync_app_repo,
     "task_file_path": task_file_path,
     "tool_manifest": _tool_manifest,
@@ -135,5 +153,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.json_output:
             print(json.dumps(envelope))
         else:
-            print(f"{envelope['error']['type']}: {envelope['error']['message']}", file=sys.stderr)
+            print(
+                f"{envelope['error']['type']}: {envelope['error']['message']}",
+                file=sys.stderr,
+            )
         return 1

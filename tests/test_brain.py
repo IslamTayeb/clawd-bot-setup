@@ -6,11 +6,19 @@ from clawd_ops import vault
 
 
 def test_build_converse_request_uses_tool_config(git_vault, monkeypatch):
-    monkeypatch.setattr(vault, "_local_now", lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")))
-    request = brain.build_converse_request([{"role": "user", "content": [{"text": "hi"}]}])
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
+    )
+    request = brain.build_converse_request(
+        [{"role": "user", "content": [{"text": "hi"}]}]
+    )
     assert request["toolConfig"]["tools"] == brain.tool_specs()
     assert request["modelId"] == brain.BEDROCK_MODEL_ID
-    assert "Persistent memory file path: memory/clawd.md" in request["system"][0]["text"]
+    assert (
+        "Persistent memory file path: memory/clawd.md" in request["system"][0]["text"]
+    )
     assert "Today's task note path is tasks/260310.md." in request["system"][0]["text"]
 
 
@@ -34,6 +42,28 @@ def test_memory_write_allows_direct_style_preference(git_vault):
         "stop using dashes in your replies",
     )
     assert stored == "Stored memory in memory/clawd.md under Tone."
+
+
+def test_email_filter_write_requires_explicit_request(git_vault):
+    try:
+        brain._execute_tool(
+            "add_email_filter",
+            {"kind": "suppress_topic", "pattern": "duke daily"},
+            "what emails have I been getting lately?",
+        )
+    except ValueError as exc:
+        assert "explicitly asks to change email notifications" in str(exc)
+    else:
+        raise AssertionError("expected explicit email filter guard to block the write")
+
+
+def test_email_filter_write_allows_explicit_notification_preference(git_vault):
+    stored = brain._execute_tool(
+        "add_email_filter",
+        {"kind": "suppress_topic", "pattern": "duke daily newsletter"},
+        "please stop sending me duke daily newsletter emails, they are not important",
+    )
+    assert stored == "Stored email filter in memory/clawd.md under Email Filters."
 
 
 def test_memory_forget_requires_explicit_request(git_vault):
