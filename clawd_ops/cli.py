@@ -15,6 +15,13 @@ from clawd_ops.google_auth import (
     set_google_auth_credentials,
     start_google_auth,
 )
+from clawd_ops.onepassword import (
+    get_1password_item,
+    list_1password_accounts,
+    list_1password_vaults,
+    read_1password_secret,
+    whoami_1password,
+)
 from clawd_ops.search import browse_web, search_papers
 from clawd_ops.vault import (
     add_todos,
@@ -49,7 +56,10 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "browse_web": browse_web,
     "finish_google_auth": finish_google_auth,
     "forget_memory": forget_memory,
+    "get_1password_item": get_1password_item,
     "list_conflicts": list_conflicts,
+    "list_1password_accounts": list_1password_accounts,
+    "list_1password_vaults": list_1password_vaults,
     "list_google_auth_accounts": list_google_auth_accounts,
     "list_google_auth_credentials": list_google_auth_credentials,
     "list_email_filters": list_email_filters,
@@ -62,6 +72,7 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "read_task_list": read_task_list,
     "remove_email_filter": remove_email_filter,
     "remember_memory": remember_memory,
+    "read_1password_secret": read_1password_secret,
     "resolve_conflict": resolve_conflict,
     "save_research": save_research,
     "search_papers": search_papers,
@@ -70,6 +81,7 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "sync_app_repo": sync_app_repo,
     "task_file_path": task_file_path,
     "tool_manifest": _tool_manifest,
+    "whoami_1password": whoami_1password,
     "write_note": write_note,
 }
 

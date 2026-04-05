@@ -66,6 +66,19 @@ def test_email_filter_write_allows_explicit_notification_preference(git_vault):
     assert stored == "Stored email filter in memory/clawd.md under Email Filters."
 
 
+def test_onepassword_access_requires_explicit_request(git_vault):
+    try:
+        brain._execute_tool(
+            "list_1password_accounts",
+            {},
+            "what accounts do I have connected?",
+        )
+    except ValueError as exc:
+        assert "explicitly asks to use 1Password" in str(exc)
+    else:
+        raise AssertionError("expected explicit 1Password guard to block access")
+
+
 def test_memory_forget_requires_explicit_request(git_vault):
     try:
         brain._execute_tool(

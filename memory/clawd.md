@@ -15,4 +15,7 @@ Persistent preferences and long-lived context for the Telegram assistant.
 ## User
 - GitHub username: IslamTayeb. gh CLI authenticated on EC2 with repo/org/workflow scopes.
 
-_Last updated: 2026-04-04 20:59 UTC_
+## Email Filters
+- suppress_topic: duke daily
+
+_Last updated: 2026-04-05 04:41 UTC_

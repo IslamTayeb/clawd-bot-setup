@@ -12,6 +12,13 @@ from clawd_ops.google_auth import (
     set_google_auth_credentials,
     start_google_auth,
 )
+from clawd_ops.onepassword import (
+    get_1password_item,
+    list_1password_accounts,
+    list_1password_vaults,
+    read_1password_secret,
+    whoami_1password,
+)
 from clawd_ops.search import browse_web, search_papers
 from clawd_ops.vault import (
     add_todos,
@@ -96,6 +103,7 @@ GOOGLE_AUTH_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+ONEPASSWORD_RE = re.compile(r"\b(1password|1\s+password|op://)\b", re.IGNORECASE)
 MEMORY_FORGET_RE = re.compile(
     r"\b(forget\b|remove .*memory\b|delete .*memory\b|drop .*memory\b)\b",
     re.IGNORECASE,
@@ -477,6 +485,74 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "list_1password_accounts",
+            "description": "List 1Password accounts available to the CLI on this machine.",
+            "inputSchema": {
+                "json": {"type": "object", "properties": {}, "required": []}
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "whoami_1password",
+            "description": "Show the currently signed-in 1Password account, if any.",
+            "inputSchema": {
+                "json": {"type": "object", "properties": {}, "required": []}
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "list_1password_vaults",
+            "description": "List 1Password vaults visible to the currently signed-in account.",
+            "inputSchema": {
+                "json": {"type": "object", "properties": {}, "required": []}
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "get_1password_item",
+            "description": "Read a 1Password item by name or UUID.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "item": {
+                            "type": "string",
+                            "description": "Item title or UUID.",
+                        },
+                        "vault": {
+                            "type": "string",
+                            "description": "Optional vault name or UUID.",
+                            "default": "",
+                        },
+                    },
+                    "required": ["item"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "read_1password_secret",
+            "description": "Read a 1Password secret reference such as op://vault/item/field.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "secret_reference": {
+                            "type": "string",
+                            "description": "1Password secret reference beginning with op://",
+                        }
+                    },
+                    "required": ["secret_reference"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
             "name": "forget_memory",
             "description": "Remove a persistent memory item by matching part of its text.",
             "inputSchema": {
@@ -568,6 +644,9 @@ TOOL_FUNCTIONS = {
     "finish_google_auth": lambda email, auth_url, services="gmail,calendar", readonly=False, client="": (
         finish_google_auth(email, auth_url, services, readonly, client)
     ),
+    "get_1password_item": lambda item, vault="": get_1password_item(item, vault),
+    "list_1password_accounts": lambda: list_1password_accounts(),
+    "list_1password_vaults": lambda: list_1password_vaults(),
     "search_papers": lambda query, max_results=5: search_papers(query, max_results),
     "read_task_list": lambda target_date="today": read_task_list(target_date),
     "read_notes": lambda path: read_notes(path),
@@ -591,6 +670,10 @@ TOOL_FUNCTIONS = {
     "start_google_auth": lambda email, services="gmail,calendar", readonly=False, client="": (
         start_google_auth(email, services, readonly, client)
     ),
+    "read_1password_secret": lambda secret_reference: read_1password_secret(
+        secret_reference
+    ),
+    "whoami_1password": lambda: whoami_1password(),
     "forget_memory": lambda query, section="": forget_memory(query, section),
     "list_conflicts": lambda status="open": list_conflicts(status),
     "read_conflict": lambda conflict_id="latest": read_conflict(conflict_id),
@@ -679,6 +762,10 @@ def _allow_google_auth(user_text: str) -> bool:
     return bool(GOOGLE_AUTH_RE.search(user_text))
 
 
+def _allow_1password(user_text: str) -> bool:
+    return bool(ONEPASSWORD_RE.search(user_text))
+
+
 def _allow_memory_forget(user_text: str) -> bool:
     return bool(MEMORY_FORGET_RE.search(user_text))
 
@@ -703,6 +790,16 @@ def _execute_tool(tool_name: str, tool_input: dict, user_text: str):
     } and not _allow_google_auth(user_text):
         raise ValueError(
             "Google auth changes can only run when the user explicitly asks to sign in or connect a Google account."
+        )
+    if tool_name in {
+        "list_1password_accounts",
+        "whoami_1password",
+        "list_1password_vaults",
+        "get_1password_item",
+        "read_1password_secret",
+    } and not _allow_1password(user_text):
+        raise ValueError(
+            "1Password access can only run when the user explicitly asks to use 1Password."
         )
     if tool_name == "forget_memory" and not _allow_memory_forget(user_text):
         raise ValueError(
