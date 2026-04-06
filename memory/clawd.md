@@ -8,6 +8,7 @@ Persistent preferences and long-lived context for the Telegram assistant.
 - Keep replies concise and straight to the point. No fluff.
 - Don't glaze / no unnecessary compliments or praise.
 - Todo list formatting: keep high-level items roughly equal in effort within their category. If a task is big, break it into sub-items (indented) so each sub-item is comparable effort to sibling items. Be extremely concise — no verbose descriptions.
+- Task files use weekly format: tasks/WXX-YYMMDD.md where XX is ISO week number and YYMMDD is the Monday of that week. Weeks run Monday to Sunday. When creating a new week's file, carry over all unchecked items from the previous week.
 
 ## Projects
 - Parameter Golf (openai/parameter-golf) competition tracker: vault note at projects/parameter-golf-tracker.md, cron job every 6h for updates.
@@ -22,4 +23,4 @@ Persistent preferences and long-lived context for the Telegram assistant.
 - whoami/ directory in Obsidian vault: resume.md (LaTeX resume), behavioral.md (personal story/motivations), current.md (current courses, research, plans, side projects). Update current.md when Islam's situation changes.
 - whoami/current.md is a living document with Islam's current courses, TA roles, research, summer plans, side projects, and direction. Check it when context matters. Update it proactively when his situation changes, but always tell him when doing so.
 
-_Last updated: 2026-04-06 00:36 UTC_
+_Last updated: 2026-04-06 07:47 UTC_
