@@ -11,6 +11,8 @@ PYTHON_BIN="/usr/bin/python3.11"
 FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
 NODE_DIST_URL="https://nodejs.org/dist/latest-v22.x"
 NODE_DIR="/opt/node-v22"
+GOG_VERSION="0.12.0"
+GOG_URL="https://github.com/steipete/gogcli/releases/download/v${GOG_VERSION}/gogcli_${GOG_VERSION}_linux_arm64.tar.gz"
 NODE_MODULES_BACKUP_DIR=""
 TMP_DIR=""
 
@@ -163,6 +165,16 @@ tar -xf "$TMP_DIR/$node_archive" -C "$NODE_DIR" --strip-components=1
 ln -sf "$NODE_DIR/bin/node" /usr/local/bin/node
 ln -sf "$NODE_DIR/bin/npm" /usr/local/bin/npm
 ln -sf "$NODE_DIR/bin/npx" /usr/local/bin/npx
+
+echo "=== Installing gog (Google Workspace CLI) ==="
+if command -v gog >/dev/null 2>&1 && gog --version 2>/dev/null | grep -qF "$GOG_VERSION"; then
+    echo "gog $GOG_VERSION already installed"
+else
+    curl -fsSL "$GOG_URL" -o "$TMP_DIR/gogcli.tar.gz"
+    tar -xf "$TMP_DIR/gogcli.tar.gz" -C "$TMP_DIR"
+    install -m 0755 "$TMP_DIR/gog" /usr/local/bin/gog
+    echo "Installed gog $(gog --version 2>&1 | head -1)"
+fi
 
 echo "=== Preparing Python runtime ==="
 alternatives --set python3 "$PYTHON_BIN" || true
