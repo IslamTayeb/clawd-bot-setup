@@ -20,5 +20,6 @@ Persistent preferences and long-lived context for the Telegram assistant.
 
 ## Vault Structure
 - whoami/ directory in Obsidian vault: resume.md (LaTeX resume), behavioral.md (personal story/motivations), current.md (current courses, research, plans, side projects). Update current.md when Islam's situation changes.
+- whoami/current.md is a living document with Islam's current courses, TA roles, research, summer plans, side projects, and direction. Check it when context matters. Update it proactively when his situation changes, but always tell him when doing so.
 
-_Last updated: 2026-04-06 00:32 UTC_
+_Last updated: 2026-04-06 00:36 UTC_
