@@ -18,4 +18,7 @@ Persistent preferences and long-lived context for the Telegram assistant.
 ## Email Filters
 - suppress_topic: duke daily
 
-_Last updated: 2026-04-05 04:41 UTC_
+## Vault Structure
+- whoami/ directory in Obsidian vault: resume.md (LaTeX resume), behavioral.md (personal story/motivations), current.md (current courses, research, plans, side projects). Update current.md when Islam's situation changes.
+
+_Last updated: 2026-04-06 00:32 UTC_
