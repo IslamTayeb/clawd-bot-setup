@@ -18,11 +18,11 @@ Persistent preferences and long-lived context for the Telegram assistant.
 
 ## Email Filters
 - suppress_topic: duke daily
-- Email handling rules: Ignore social events, mailing lists, security/verification links, and general newsletters. Unsubscribe from mailing lists when possible. Only surface emails that are actionable (add to todo list) or contain specific important information. Don't just summarize emails for the sake of it.
+- Email handling rules: Ignore social events, mailing lists, security/verification links, and general newsletters. Only unsubscribe from obvious junk (event newsletters, marketing, campus social). Never unsubscribe from academic or departmental lists. Only surface emails that are actionable (add to todo list) or contain specific important information. Don't just summarize emails for the sake of it.
 
 ## Vault Structure
 - whoami/ directory in Obsidian vault: resume.md (LaTeX resume), behavioral.md (personal story/motivations), current.md (current courses, research, plans, side projects). Update current.md when Islam's situation changes.
 - whoami/current.md is a living document with Islam's current courses, TA roles, research, summer plans, side projects, and direction. Check it when context matters. Update it proactively when his situation changes, but always tell him when doing so.
 - Obsidian vault directory map: - apm-overflow/: blog posts (drafts at root, brainstorming/, complete/, scrapped/) - personal/reflections/: late-night reflections, messy thoughts - projects/: quick research and planning for personal projects. Used when Islam asks Clawd to research a specific topic before starting a project, or to track progress. Reference material before and during a project. - scratch/: one-off tasks, periodically cleared - tasks/: weekly to-do lists (WXX-YYMMDD format) - tech/companies/: essays for company applications (e.g. "why join us"), needs migration from Google Docs - whoami/: resume, behavioral story, current state (living doc) - world-breaking-ideas.md: side project ideas that aren't tied to active research. Add new ideas here when Islam brainstorms.
 
-_Last updated: 2026-04-06 13:41 UTC_
+_Last updated: 2026-04-06 13:44 UTC_
