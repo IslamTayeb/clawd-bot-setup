@@ -274,6 +274,29 @@ RestartSec=30
 WantedBy=multi-user.target
 SERVICEEOF
 
+cat > /etc/systemd/system/clawd-bot-gmail-watcher.service <<'SERVICEEOF'
+[Unit]
+Description=Clawd Gmail watcher
+After=network-online.target clawd-bot.service
+Wants=network-online.target clawd-bot.service
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/home/ec2-user/clawd-bot
+Environment=HOME=/home/ec2-user
+Environment=OPENCLAW_STATE_DIR=/home/ec2-user/.openclaw
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:/home/ec2-user/clawd-bot/.venv/bin
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/home/ec2-user/clawd-bot/.env
+ExecStart=/home/ec2-user/clawd-bot/.venv/bin/python -m clawd_ops.gmail_watcher watch --include-body
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target
+SERVICEEOF
+
 systemctl daemon-reload
 systemctl enable --now clawd-bot-repo-sync.timer
 
@@ -291,6 +314,14 @@ if grep -Eqi '^DUKE_EXCHANGE_ENABLED=(1|true|yes|on)$' "$PROJECT_DIR/.env"; then
 else
     systemctl disable clawd-bot-duke-exchange >/dev/null 2>&1 || true
     echo "=== Duke Exchange watcher left disabled: set DUKE_EXCHANGE_ENABLED=true after auth ==="
+fi
+
+if grep -Eqi '^GMAIL_WATCHER_ENABLED=(1|true|yes|on)$' "$PROJECT_DIR/.env"; then
+    systemctl enable clawd-bot-gmail-watcher
+    echo "=== Gmail watcher enabled ==="
+else
+    systemctl disable clawd-bot-gmail-watcher >/dev/null 2>&1 || true
+    echo "=== Gmail watcher left disabled: set GMAIL_WATCHER_ENABLED=true in .env ==="
 fi
 
 echo "=== Setup complete ==="
