@@ -4,7 +4,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-opus-4-6-v1"
+DEFAULT_BEDROCK_MODEL_ID = "us.anthropic.claude-opus-4-7"
 
 
 def _required(env: Mapping[str, str], key: str) -> str:
@@ -26,6 +26,7 @@ def build_openclaw_config(
     python_path = python_exec or env.get("CLAWD_PYTHON_EXEC", "").strip()
     if not python_path:
         python_path = str(Path(workspace_dir) / ".venv" / "bin" / "python")
+    tts_prefs_path = str(Path(workspace_dir) / ".openclaw" / "settings" / "tts.json")
 
     region = env.get("AWS_REGION", "us-east-1").strip() or "us-east-1"
     timezone_name = (
@@ -104,7 +105,7 @@ def build_openclaw_config(
                     "models": [
                         {
                             "id": model_id,
-                            "name": "Claude Opus 4.6 (Bedrock)",
+                            "name": "Claude Opus 4.7 (Bedrock)",
                             "reasoning": True,
                             "input": ["text", "image"],
                             "cost": {
@@ -157,6 +158,9 @@ def build_openclaw_config(
             "tts": {
                 "auto": "inbound",
                 "provider": "openai",
+                "prefsPath": tts_prefs_path,
+                "maxTextLength": 1000000,
+                "timeoutMs": 120000,
                 "openai": {
                     "model": "gpt-4o-mini-tts",
                     "voice": "alloy",
@@ -177,6 +181,10 @@ def build_openclaw_config(
                 "repoRoot": workspace_dir,
                 "userTimezone": timezone_name,
                 "model": {"primary": model_ref},
+                # Opus 4.7 requires thinking.type="adaptive", but the installed
+                # OpenClaw release only emits "enabled"/"disabled". Force off
+                # until the OpenClaw runtime is updated to support adaptive.
+                "thinkingDefault": "off",
             },
             "list": [
                 {

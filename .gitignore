@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 .venv/
 node_modules/
+node_modules.backup*/
+.setup-state/
+raw/
 .pytest_cache/
 .vitest/
 dist/
