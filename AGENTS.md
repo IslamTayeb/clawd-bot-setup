@@ -7,6 +7,7 @@
 - Durable memory lives in `memory/clawd.md`.
 - Only write or delete durable memory when the user explicitly asks to remember or forget something.
 - Task notes live in weekly files `tasks/W##-YYMMDD.md` (where YYMMDD is the Monday of that ISO week) and daily files `tasks/YYMMDD.md`. Default to the current weekly file for new todos; read both formats when answering questions about tasks. Resolve relative dates like today, yesterday, and tomorrow before acting.
+- Weekly task files have no top-level `#` header; they start directly with `##` section headings (Research, Projects, Housekeeping, Personal, etc.). When creating a new week, carry over all unchecked items from the previous week and pull the vault from git first.
 - If a sync conflict exists, use the conflict tools to explain it and wait for the user to choose a resolution. Do not choose `keep_local` or `keep_remote` without explicit user direction.
 - Prefer tool use over guessing when the answer depends on vault state or web content.
 
