@@ -18,7 +18,10 @@ describe("clawd-obsidian plugin", () => {
     plugin.register({
       id: "clawd-obsidian",
       name: "Clawd Obsidian",
-      source: path.join(process.cwd(), ".openclaw/extensions/clawd-obsidian/index.ts"),
+      source: path.join(
+        process.cwd(),
+        ".openclaw/extensions/clawd-obsidian/index.ts",
+      ),
       config: {},
       runtime: {} as never,
       logger: {} as never,
@@ -47,7 +50,10 @@ describe("clawd-obsidian plugin", () => {
         name: "resolve_conflict",
       }),
     );
-    expect(on).toHaveBeenCalledWith("before_prompt_build", expect.any(Function));
+    expect(on).toHaveBeenCalledWith(
+      "before_prompt_build",
+      expect.any(Function),
+    );
   });
 
   it("resolves the default bridge config", () => {
@@ -63,7 +69,9 @@ describe("clawd-obsidian plugin", () => {
       pythonExec: process.env.OPENCLAW_PYTHON ?? ".venv/bin/python",
       timeoutMs: 10000,
     });
-    const envelope = await runBridgeCommand(config, "task_file_path", { target_date: "today" });
+    const envelope = await runBridgeCommand(config, "task_file_path", {
+      target_date: "today",
+    });
     expect(envelope.ok).toBe(true);
     if (envelope.ok) {
       expect(String(envelope.result)).toMatch(/^tasks\/\d{6}\.md$/);
@@ -80,8 +88,11 @@ describe("clawd-obsidian plugin", () => {
   it("renders a valid OpenClaw runtime config", () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "clawd-openclaw-"));
     const configPath = path.join(tempDir, "openclaw.runtime.json");
-    const pythonExec = process.env.OPENCLAW_PYTHON ?? path.resolve(".venv/bin/python");
-    const openclawEntrypoint = path.resolve("node_modules/openclaw/openclaw.mjs");
+    const pythonExec =
+      process.env.OPENCLAW_PYTHON ?? path.resolve(".venv/bin/python");
+    const openclawEntrypoint = path.resolve(
+      "node_modules/openclaw/openclaw.mjs",
+    );
 
     execFileSync(
       pythonExec,
@@ -102,7 +113,7 @@ describe("clawd-obsidian plugin", () => {
           TELEGRAM_TOKEN: "123456:abc",
           ALLOWED_USER_ID: "8383879897",
           AWS_REGION: "us-east-1",
-          BEDROCK_MODEL_ID: "us.anthropic.claude-opus-4-6-v1",
+          BEDROCK_MODEL_ID: "us.anthropic.claude-opus-4-7",
           BOT_TIMEZONE: "America/New_York",
         },
       },

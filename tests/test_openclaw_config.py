@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from clawd_ops.openclaw_config import build_openclaw_config
 
 
@@ -23,7 +25,7 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
     config, python_exec = _build_config(
         tmp_path,
         {
-            "BEDROCK_MODEL_ID": "us.anthropic.claude-opus-4-6-v1",
+            "BEDROCK_MODEL_ID": "us.anthropic.claude-opus-4-7",
             "BOT_TIMEZONE": "America/New_York",
         },
     )
@@ -31,7 +33,7 @@ def test_build_openclaw_config_preserves_model_id_and_bridges_python(tmp_path):
     assert config["models"]["bedrockDiscovery"]["enabled"] is False
     assert (
         config["agents"]["defaults"]["model"]["primary"]
-        == "amazon-bedrock/us.anthropic.claude-opus-4-6-v1"
+        == "amazon-bedrock/us.anthropic.claude-opus-4-7"
     )
     assert config["tools"]["alsoAllow"] == ["clawd-obsidian", "exec"]
     assert config["agents"]["list"][0]["tools"]["alsoAllow"] == [
@@ -68,6 +70,14 @@ def test_build_openclaw_config_has_tts(tmp_path):
     tts = config["messages"]["tts"]
     assert tts["auto"] == "inbound"
     assert tts["provider"] == "openai"
+    assert tts["prefsPath"] == str(
+        Path(config["agents"]["defaults"]["workspace"])
+        / ".openclaw"
+        / "settings"
+        / "tts.json"
+    )
+    assert tts["maxTextLength"] == 1000000
+    assert tts["timeoutMs"] == 120000
     assert tts["openai"]["model"] == "gpt-4o-mini-tts"
     assert tts["edge"]["enabled"] is True
 

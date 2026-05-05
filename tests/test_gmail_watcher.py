@@ -156,10 +156,12 @@ def test_build_hook_message_includes_account(tmp_path):
     assert "miivii69@gmail.com" in text
     assert "Test subject" in text
     assert "Alice" in text
-    assert "test reason" in text
+    assert "EMAIL CONTEXT" in text
+    assert "END EMAIL CONTEXT" in text
+    assert "todos" in text.lower()
 
 
-def test_security_alert_always_notifies(tmp_path):
+def test_security_alert_is_suppressed(tmp_path):
     config = _config(tmp_path)
     message = _message(
         subject="Security alert: new sign-in from Chrome",
@@ -169,5 +171,5 @@ def test_security_alert_always_notifies(tmp_path):
 
     should_notify, reason = gmail_watcher._should_notify_message(config, message)
 
-    assert should_notify is True
-    assert reason == "security-sensitive"
+    assert should_notify is False
+    assert reason == "security or sign-in alert"

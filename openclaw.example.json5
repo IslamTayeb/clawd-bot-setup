@@ -39,7 +39,7 @@
         models: [
           {
             id: "<OPENCLAW_BEDROCK_MODEL_ID>",
-            name: "Claude Opus 4.6 (Bedrock)",
+            name: "Claude Opus 4.7 (Bedrock)",
             reasoning: true,
             input: ["text", "image"],
             cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },

@@ -118,7 +118,7 @@ Each Gmail account needs its own OAuth authorization. Run these steps per accoun
    ```bash
    gog auth list
    gog calendar calendars --account newaccount@gmail.com
-   gog gmail search "newer_than:1d" --account newaccount@gmail.com --max 5
+   gog gmail messages search "newer_than:1d" --account newaccount@gmail.com --max 5
    ```
 
 4. If you want Gmail push notifications for this account, also run:

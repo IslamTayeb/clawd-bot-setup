@@ -132,7 +132,7 @@ def test_write_note_rejects_path_escape(git_vault):
         raise AssertionError("expected path escape rejection")
 
 
-def test_list_files_only_returns_markdown(git_vault):
+def test_list_files_only_returns_readable_formats(git_vault):
     (git_vault / "personal" / "note.md").write_text("hi\n", encoding="utf-8")
     (git_vault / "personal" / "ignore.txt").write_text("hi\n", encoding="utf-8")
     files = vault.list_files("personal").splitlines()

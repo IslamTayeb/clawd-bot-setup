@@ -1,0 +1,6 @@
+{
+  "tts": {
+    "maxLength": 1000000,
+    "summarize": true
+  }
+}

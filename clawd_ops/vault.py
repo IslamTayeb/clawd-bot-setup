@@ -25,6 +25,7 @@ EMAIL_FILTER_KINDS = (
     "suppress_topic",
 )
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
+READABLE_SUFFIXES = {".md", ".markdown", ".pdf"}
 LEGACY_TASK_FILE_RE = re.compile(r"^\d{6}\.md$")
 
 try:
@@ -768,6 +769,28 @@ def save_research(title: str, content: str) -> str:
         return f"Saved research to {target.relative_to(_vault())}."
 
 
+def _extract_pdf_text(path: Path, max_chars: int = 50000) -> str:
+    try:
+        import fitz  # pymupdf
+    except ImportError:
+        return "(PDF reading unavailable: pymupdf is not installed)"
+    try:
+        doc = fitz.open(str(path))
+        pages: list[str] = []
+        total = 0
+        for page in doc:
+            text = page.get_text()
+            if total + len(text) > max_chars:
+                pages.append(text[: max_chars - total])
+                break
+            pages.append(text)
+            total += len(text)
+        doc.close()
+        return "\n\n".join(pages).strip() or "(PDF has no extractable text)"
+    except Exception as exc:
+        return f"(Failed to read PDF: {exc})"
+
+
 def read_notes(path: str) -> str:
     with _vault_lock():
         git_pull()
@@ -775,7 +798,22 @@ def read_notes(path: str) -> str:
         target = _resolve_in_vault(path)
         if not target.exists() or not target.is_file():
             return f"File not found: {path}"
+        if target.suffix.lower() == ".pdf":
+            return _extract_pdf_text(target)
         return target.read_text(encoding="utf-8")
+
+
+def read_pdf(path: str, max_chars: int = 50000) -> str:
+    """Read a PDF file from the vault and return its text content."""
+    with _vault_lock():
+        git_pull()
+
+        target = _resolve_in_vault(path)
+        if not target.exists() or not target.is_file():
+            return f"File not found: {path}"
+        if target.suffix.lower() != ".pdf":
+            return f"Not a PDF file: {path}"
+        return _extract_pdf_text(target, max_chars=max_chars)
 
 
 def list_files(folder: str = "") -> str:
@@ -790,8 +828,8 @@ def list_files(folder: str = "") -> str:
         for path in sorted(target.rglob("*")):
             if not path.is_file():
                 continue
-            if path.suffix.lower() not in MARKDOWN_SUFFIXES:
+            if path.suffix.lower() not in READABLE_SUFFIXES:
                 continue
             files.append(str(path.relative_to(_vault())))
 
-        return "\n".join(files) if files else "No markdown files found."
+        return "\n".join(files) if files else "No readable files found."

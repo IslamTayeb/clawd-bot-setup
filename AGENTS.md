@@ -35,9 +35,26 @@ Calendar commands (always use `--account islam.moh.islamm@gmail.com`):
 The primary account has multiple calendars: Professional, Personal, Chats, Todoist, Office Hours, Studying, Research, Courses, Islam Tayeb, Partiful (read-only), Duke Dining (read-only). Use `--cal "NAME"` to target a specific calendar.
 
 Gmail commands:
-- `gog gmail search "query" --account EMAIL --max N` -- search mail
+- `gog gmail messages search "query" --account EMAIL --max N` -- search mail (per-message, not per-thread)
+- `gog gmail search "query" --account EMAIL --max N` -- search mail (per-thread; use messages search when you need individual emails)
 - `gog gmail send --account EMAIL --to RECIPIENT --subject "Subject" --body "Body"` -- send
 - Use `--json --results-only` flags when you need structured output.
+
+## Duke Email (@duke.edu)
+
+The user's Duke university email is connected via Microsoft Exchange/EWS (Outlook). The bot has tools to search, list, and read Duke emails directly:
+
+- `search_duke_email` -- keyword search across the Duke inbox (uses Outlook/AQS query syntax)
+- `list_duke_email` -- list recent Duke inbox emails
+- `read_duke_email` -- read a specific Duke email by item_id
+- `check_latest_emails` -- fetches latest emails from ALL accounts (Gmail + Duke) at once
+
+Duke email uses OAuth device-code auth against Microsoft 365. Configuration is via env vars:
+- `DUKE_EXCHANGE_EMAIL` -- the @duke.edu address
+- `DUKE_EXCHANGE_CLIENT_ID` -- defaults to Duke's published OAuth client
+- Auth tokens are stored at `~/.openclaw/duke-exchange/token.json`
+
+If the user asks "check my emails" or "what came in", use the `check_latest_emails` tool which covers all accounts.
 
 ## Response Style
 

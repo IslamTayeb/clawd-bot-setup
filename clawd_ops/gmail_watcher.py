@@ -64,6 +64,47 @@ SECURITY_HINTS = (
     "2fa",
     "account locked",
 )
+VERIFICATION_HINTS = (
+    "verification code",
+    "verify your",
+    "confirm your email",
+    "one-time code",
+    "one-time password",
+    "otp",
+    "login code",
+    "sign-in code",
+    "auth code",
+    "confirmation code",
+)
+MAILING_LIST_HINTS = (
+    "list-unsubscribe",
+    "mailing list",
+    "listserv",
+    "you are receiving this",
+    "unsubscribe",
+    "manage your subscription",
+    "email preferences",
+    "opt out",
+)
+CALENDAR_HINTS = (
+    "invitation",
+    "invite",
+    "calendar event",
+    "meeting request",
+    "accepted:",
+    "declined:",
+    "tentative:",
+    "updated invitation",
+    "canceled event",
+    "cancelled event",
+    "event notification",
+    "new event",
+    "has invited you",
+    "rsvp",
+    "join with google meet",
+    "join zoom meeting",
+    "teams meeting",
+)
 ACTION_HINTS = (
     "deadline",
     "due",
@@ -186,21 +227,24 @@ def _run_gog(
 def _fetch_recent_messages(
     config: GmailWatcherConfig, account: str
 ) -> list[GmailMessage]:
-    result = _run_gog(
-        config,
+    cmd: list[str] = [
         "gmail",
+        "messages",
         "search",
-        "newer_than:1h",
+        "newer_than:1d",
         "--account",
         account,
         "--max",
         str(config.max_results),
         "--json",
         "--results-only",
-    )
+    ]
+    if config.include_body:
+        cmd.append("--include-body")
+    result = _run_gog(config, *cmd)
     if result.returncode != 0:
         raise RuntimeError(
-            f"gog gmail search failed for {account}: "
+            f"gog gmail messages search failed for {account}: "
             f"{result.stderr.strip() or result.stdout.strip()}"
         )
     raw = result.stdout.strip()
@@ -220,9 +264,7 @@ def _fetch_recent_messages(
             sender_email = from_raw[from_raw.index("<") + 1 : from_raw.index(">")]
 
         snippet = item.get("snippet", "")
-        body = ""
-        if config.include_body:
-            body = _fetch_body(config, account, item.get("id", ""))
+        body = item.get("body", "") if config.include_body else ""
 
         messages.append(
             GmailMessage(
@@ -238,31 +280,6 @@ def _fetch_recent_messages(
             )
         )
     return messages
-
-
-def _fetch_body(config: GmailWatcherConfig, account: str, message_id: str) -> str:
-    if not message_id:
-        return ""
-    result = _run_gog(
-        config,
-        "gmail",
-        "get",
-        message_id,
-        "--account",
-        account,
-        "--body",
-        "--max-bytes",
-        str(config.body_max_chars),
-        "--json",
-        "--results-only",
-    )
-    if result.returncode != 0:
-        return ""
-    try:
-        data = json.loads(result.stdout.strip())
-        return data.get("body", "") if isinstance(data, dict) else ""
-    except (json.JSONDecodeError, ValueError):
-        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -354,6 +371,12 @@ def _should_notify_message(
     has_security_signal = _subject_matches_any(
         message, SECURITY_HINTS
     ) or _body_matches_any(message, SECURITY_HINTS)
+    has_verification_signal = _subject_matches_any(
+        message, VERIFICATION_HINTS
+    ) or _body_matches_any(message, VERIFICATION_HINTS)
+    has_calendar_signal = _subject_matches_any(
+        message, CALENDAR_HINTS
+    ) or _body_matches_any(message, CALENDAR_HINTS)
     action_score = sum(
         (
             _subject_matches_any(message, ACTION_HINTS),
@@ -369,18 +392,25 @@ def _should_notify_message(
     looks_bulk = _sender_matches_any(message, NEWSLETTER_HINTS) or _subject_matches_any(
         message, NEWSLETTER_HINTS
     )
+    looks_mailing_list = _body_matches_any(message, MAILING_LIST_HINTS)
     looks_routine = _subject_matches_any(message, ROUTINE_HINTS)
     direct_sender = _is_direct_sender(message)
 
     if has_security_signal:
-        return True, "security-sensitive"
+        return False, "security or sign-in alert"
+    if has_verification_signal:
+        return False, "verification or one-time code"
+    if has_calendar_signal:
+        return False, "calendar or meeting invite (already on calendar)"
     if looks_bulk:
         return False, "bulk or newsletter email"
+    if looks_mailing_list:
+        return False, "mailing list"
     if direct_sender and not looks_bulk and not looks_routine:
         return True, "direct human or non-bulk sender"
     if action_score >= 2 and not looks_bulk:
         return True, "deadline or action required"
-    if _sender_matches_any(message, AUTOMATED_SENDER_HINTS) and not has_security_signal:
+    if _sender_matches_any(message, AUTOMATED_SENDER_HINTS):
         return False, "automated notification"
     if looks_routine and opportunity_score == 0:
         return False, "routine update"
@@ -396,22 +426,23 @@ def _build_hook_message(
     config: GmailWatcherConfig, message: GmailMessage, *, reason: str
 ) -> str:
     lines = [
-        f"A new Gmail email passed the local importance filter on {message.account}.",
-        f"Why it passed: {reason}.",
-        "Reply in at most 3 short lines:",
-        "1. Why it matters",
-        "2. Deadline or action item if any",
-        '3. One suggested next step as a question, like "Want me to draft a reply?" or "Want me to add a todo?"',
-        "If it looks like an application, internship, funding, or opportunity, you may ask whether to apply or review requirements.",
-        "",
+        "--- EMAIL CONTEXT (preserve for followup) ---",
         f"Account: {message.account}",
+        f"Message-ID: {message.message_id}",
         f"From: {message.sender_display()}",
         f"Subject: {message.subject}",
     ]
     if message.received_at:
         lines.append(f"Received: {message.received_at}")
     if config.include_body and message.body:
-        lines.extend(["", "Body snippet:", message.body])
+        lines.extend(["", "Body:", message.body])
+    lines.extend(
+        [
+            "--- END EMAIL CONTEXT ---",
+            "",
+            "Summarize this email in one sentence, then ask: want me to add anything to your todos?",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -732,3 +763,142 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+# ---------------------------------------------------------------------------
+# Bot-callable tools (used by brain.py, not the watcher loop)
+# ---------------------------------------------------------------------------
+
+_DEFAULT_GMAIL_ACCOUNTS = (
+    "islam.moh.islamm@gmail.com",
+    "miivii69@gmail.com",
+    "miivii420@gmail.com",
+    "maeviiss@gmail.com",
+)
+
+
+def _quick_config() -> GmailWatcherConfig:
+    """Minimal config for one-shot tool calls (not the watcher loop)."""
+    accounts_raw = os.environ.get("GMAIL_WATCHER_ACCOUNTS", "")
+    accounts = (
+        tuple(a.strip() for a in accounts_raw.split(",") if a.strip())
+        if accounts_raw
+        else _DEFAULT_GMAIL_ACCOUNTS
+    )
+    return GmailWatcherConfig(
+        accounts=accounts,
+        hook_url="",
+        hook_token="",
+        channel=None,
+        to=None,
+        poll_seconds=0,
+        max_results=10,
+        include_body=True,
+        body_max_chars=3000,
+        notify_mode="off",
+        always_notify_senders=(),
+        never_notify_senders=(),
+        tracked_item_limit=200,
+        gog_bin=os.environ.get("GOG_BIN", "gog"),
+    )
+
+
+def tool_check_latest_gmail(max_per_account: int = 5) -> str:
+    """Fetch the latest emails from all Gmail accounts with full bodies."""
+    config = _quick_config()
+    all_lines: list[str] = []
+    for account in config.accounts:
+        try:
+            cmd: list[str] = [
+                "gmail",
+                "messages",
+                "search",
+                "newer_than:2d",
+                "--account",
+                account,
+                "--max",
+                str(max_per_account),
+                "--json",
+                "--results-only",
+                "--include-body",
+            ]
+            result = _run_gog(config, *cmd)
+            if result.returncode != 0:
+                all_lines.append(f"[{account}] Search failed: {result.stderr.strip()}")
+                continue
+            raw = result.stdout.strip()
+            if not raw:
+                all_lines.append(f"[{account}] No recent emails.")
+                continue
+            items = json.loads(raw)
+            if not isinstance(items, list) or not items:
+                all_lines.append(f"[{account}] No recent emails.")
+                continue
+            all_lines.append(f"[{account}] {len(items)} email(s):")
+            for item in items:
+                from_raw = item.get("from", "(unknown)")
+                subject = item.get("subject", "(no subject)")
+                date = item.get("date", "")
+                body = item.get("body", item.get("snippet", ""))
+                if body and len(body) > 3000:
+                    body = body[:3000] + "..."
+                all_lines.append(f"  From: {from_raw}")
+                all_lines.append(f"  Subject: {subject}")
+                all_lines.append(f"  Date: {date}")
+                if body:
+                    all_lines.append(f"  Body: {body}")
+                all_lines.append("")
+        except Exception as exc:
+            all_lines.append(f"[{account}] Error: {exc}")
+    return "\n".join(all_lines) if all_lines else "No emails found across any account."
+
+
+def tool_search_gmail(query: str, account: str = "", max_results: int = 10) -> str:
+    """Search Gmail by query. If account is empty, searches all accounts."""
+    config = _quick_config()
+    accounts = (account,) if account else config.accounts
+    all_lines: list[str] = []
+    for acct in accounts:
+        try:
+            cmd: list[str] = [
+                "gmail",
+                "messages",
+                "search",
+                query,
+                "--account",
+                acct,
+                "--max",
+                str(max_results),
+                "--json",
+                "--results-only",
+                "--include-body",
+            ]
+            result = _run_gog(config, *cmd)
+            if result.returncode != 0:
+                all_lines.append(f"[{acct}] Search failed: {result.stderr.strip()}")
+                continue
+            raw = result.stdout.strip()
+            if not raw:
+                all_lines.append(f"[{acct}] No results for: {query}")
+                continue
+            items = json.loads(raw)
+            if not isinstance(items, list) or not items:
+                all_lines.append(f"[{acct}] No results for: {query}")
+                continue
+            all_lines.append(f"[{acct}] {len(items)} result(s):")
+            for item in items:
+                from_raw = item.get("from", "(unknown)")
+                subject = item.get("subject", "(no subject)")
+                date = item.get("date", "")
+                body = item.get("body", item.get("snippet", ""))
+                if body and len(body) > 2000:
+                    body = body[:2000] + "..."
+                all_lines.append(f"  From: {from_raw}")
+                all_lines.append(f"  Subject: {subject}")
+                all_lines.append(f"  Date: {date}")
+                if body:
+                    all_lines.append(f"  Body: {body}")
+                all_lines.append("")
+        except Exception as exc:
+            all_lines.append(f"[{acct}] Error: {exc}")
+    return "\n".join(all_lines) if all_lines else "No results found."

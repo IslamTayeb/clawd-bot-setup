@@ -5,6 +5,16 @@ import re
 import boto3
 
 from clawd_ops.conflicts import list_conflicts, read_conflict, resolve_conflict
+from clawd_ops.exchange import (
+    is_duke_email_connected,
+    tool_list_duke_email,
+    tool_read_duke_email,
+    tool_search_duke_email,
+)
+from clawd_ops.gmail_watcher import (
+    tool_check_latest_gmail,
+    tool_search_gmail,
+)
 from clawd_ops.google_auth import (
     finish_google_auth,
     list_google_auth_accounts,
@@ -31,6 +41,7 @@ from clawd_ops.vault import (
     remove_email_filter,
     read_memory,
     read_notes,
+    read_pdf,
     read_task_list,
     remember_memory,
     save_research,
@@ -38,7 +49,7 @@ from clawd_ops.vault import (
     write_note,
 )
 
-BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-6-v1")
+BEDROCK_MODEL_ID = os.environ.get("BEDROCK_MODEL_ID", "us.anthropic.claude-opus-4-7")
 SYSTEM_PROMPT_BASE = """You are Clawd, a personal Telegram assistant with access to an Obsidian vault and a local persistent memory file.
 
 Core behaviors:
@@ -53,6 +64,19 @@ Core behaviors:
 - Keep todo items short and actionable. The todo workflow writes into tasks/YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow.
 - If a sync conflict exists, use the conflict tools to explain the situation and wait for the user to choose a resolution strategy.
 - If a tool fails, explain the failure plainly and propose the next best action.
+
+Email:
+- You have access to 4 Gmail accounts and a Duke @duke.edu Outlook/Exchange account.
+- When the user says "check my emails", "what came in", or "latest emails", use the check_latest_emails tool. It fetches from ALL accounts at once with full bodies.
+- You can search Gmail with search_gmail and Duke email with search_duke_email.
+- You can read a specific Duke email by item_id with read_duke_email.
+- When an email notification comes in from the watcher, keep it simple: summarize in one sentence and ask if the user wants to add anything to their todos. Don't over-explain.
+
+Calendar:
+- Google Calendar is accessible via the exec tool using gog CLI commands.
+- The primary calendar account is islam.moh.islamm@gmail.com.
+- Always use --account islam.moh.islamm@gmail.com for calendar commands.
+- Meeting invites that arrive by email are already on the calendar -- don't notify about them.
 
 Formatting:
 - Telegram supports only limited formatting. Keep formatting simple.
@@ -247,7 +271,7 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "list_files",
-            "description": "List markdown files in an Obsidian vault folder.",
+            "description": "List readable files (markdown and PDF) in an Obsidian vault folder.",
             "inputSchema": {
                 "json": {
                     "type": "object",
@@ -636,6 +660,136 @@ TOOLS = [
             },
         }
     },
+    {
+        "toolSpec": {
+            "name": "read_pdf",
+            "description": "Read a PDF file from the Obsidian vault and return its text content. Use for research papers, syllabi, or any PDF documents stored in the vault.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "path": {
+                            "type": "string",
+                            "description": "Path to the PDF file within the vault.",
+                        },
+                        "max_chars": {
+                            "type": "integer",
+                            "description": "Maximum characters to extract. Defaults to 50000.",
+                            "default": 50000,
+                        },
+                    },
+                    "required": ["path"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "check_latest_emails",
+            "description": "Fetch the latest emails from ALL connected accounts (Gmail + Duke Outlook) with full bodies. Use when the user says 'check my emails', 'what came in', 'latest emails', etc.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "max_per_account": {
+                            "type": "integer",
+                            "description": "Max emails per account. Defaults to 5.",
+                            "default": 5,
+                        },
+                    },
+                    "required": [],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "search_gmail",
+            "description": "Search Gmail by query across all Gmail accounts (or a specific one). Supports Gmail search syntax like from:, subject:, newer_than:, etc.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Gmail search query, e.g. 'from:professor subject:grade' or 'newer_than:3d has:attachment'.",
+                        },
+                        "account": {
+                            "type": "string",
+                            "description": "Specific Gmail account to search. Empty searches all accounts.",
+                            "default": "",
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Max results. Defaults to 10.",
+                            "default": 10,
+                        },
+                    },
+                    "required": ["query"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "search_duke_email",
+            "description": "Search Duke @duke.edu email by keyword. Uses Outlook/EWS query syntax (same as Outlook search bar). Returns results with sender, subject, date, and body snippet.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query, e.g. 'from:registrar' or 'subject:grade report'.",
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Max results. Defaults to 10.",
+                            "default": 10,
+                        },
+                    },
+                    "required": ["query"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "read_duke_email",
+            "description": "Read a single Duke email by its item_id (returned from search_duke_email or check_latest_emails). Returns the full body.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "item_id": {
+                            "type": "string",
+                            "description": "The EWS item_id of the email to read.",
+                        },
+                    },
+                    "required": ["item_id"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "list_duke_email",
+            "description": "List recent Duke @duke.edu inbox emails. Use when the user asks about their Duke email or university inbox.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Max emails to list. Defaults to 10.",
+                            "default": 10,
+                        },
+                    },
+                    "required": [],
+                }
+            },
+        }
+    },
 ]
 
 TOOL_FUNCTIONS = {
@@ -680,7 +834,41 @@ TOOL_FUNCTIONS = {
     "resolve_conflict": lambda conflict_id="latest", strategy="retry_sync": (
         resolve_conflict(conflict_id, strategy)
     ),
+    "read_pdf": lambda path, max_chars=50000: read_pdf(path, max_chars),
+    "check_latest_emails": lambda max_per_account=5: _check_all_emails(max_per_account),
+    "search_gmail": lambda query, account="", max_results=10: tool_search_gmail(
+        query, account, max_results
+    ),
+    "search_duke_email": lambda query, max_results=10: tool_search_duke_email(
+        query, max_results
+    ),
+    "read_duke_email": lambda item_id: tool_read_duke_email(item_id),
+    "list_duke_email": lambda max_results=10: tool_list_duke_email(max_results),
 }
+
+
+def _check_all_emails(max_per_account: int = 5) -> str:
+    """Unified tool: fetch latest from all Gmail accounts + Duke email."""
+    parts: list[str] = []
+
+    # Gmail accounts
+    gmail_result = tool_check_latest_gmail(max_per_account)
+    if gmail_result:
+        parts.append("=== GMAIL ===")
+        parts.append(gmail_result)
+
+    # Duke email
+    if is_duke_email_connected():
+        duke_result = tool_list_duke_email(max_per_account)
+        parts.append("")
+        parts.append("=== DUKE EMAIL ===")
+        parts.append(duke_result)
+    else:
+        parts.append("")
+        parts.append("=== DUKE EMAIL ===")
+        parts.append("Duke email is not connected.")
+
+    return "\n".join(parts)
 
 
 def tool_specs() -> list[dict]:

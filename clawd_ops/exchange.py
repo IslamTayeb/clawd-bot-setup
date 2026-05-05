@@ -147,6 +147,47 @@ SECURITY_HINTS = (
     "2fa",
     "account locked",
 )
+VERIFICATION_HINTS = (
+    "verification code",
+    "verify your",
+    "confirm your email",
+    "one-time code",
+    "one-time password",
+    "otp",
+    "login code",
+    "sign-in code",
+    "auth code",
+    "confirmation code",
+)
+MAILING_LIST_HINTS = (
+    "list-unsubscribe",
+    "mailing list",
+    "listserv",
+    "you are receiving this",
+    "unsubscribe",
+    "manage your subscription",
+    "email preferences",
+    "opt out",
+)
+CALENDAR_HINTS = (
+    "invitation",
+    "invite",
+    "calendar event",
+    "meeting request",
+    "accepted:",
+    "declined:",
+    "tentative:",
+    "updated invitation",
+    "canceled event",
+    "cancelled event",
+    "event notification",
+    "new event",
+    "has invited you",
+    "rsvp",
+    "join with google meet",
+    "join zoom meeting",
+    "teams meeting",
+)
 ACTION_HINTS = (
     "deadline",
     "due",
@@ -692,6 +733,87 @@ def probe_inbox(config: ExchangeConfig, *, limit: int) -> dict[str, Any]:
     }
 
 
+def search_inbox(
+    config: ExchangeConfig, *, query: str, limit: int = 25
+) -> list[dict[str, Any]]:
+    """Search the Duke inbox using an AQS (Advanced Query Syntax) keyword string.
+
+    EWS supports the same AQS syntax that Outlook uses:
+      - ``from:alice subject:meeting``
+      - ``received:this week``
+      - free-text keyword matching against subject + body
+    """
+    access_token = get_access_token(config)
+    search_xml = f"""
+<m:FindItem Traversal="Shallow">
+  <m:ItemShape>
+    <t:BaseShape>IdOnly</t:BaseShape>
+  </m:ItemShape>
+  <m:IndexedPageItemView MaxEntriesReturned="{limit}" Offset="0" BasePoint="Beginning" />
+  <m:SortOrder>
+    <t:FieldOrder Order="Descending">
+      <t:FieldURI FieldURI="item:DateTimeReceived" />
+    </t:FieldOrder>
+  </m:SortOrder>
+  <m:ParentFolderIds>
+    <t:DistinguishedFolderId Id="inbox" />
+  </m:ParentFolderIds>
+  <m:QueryString>{escape(query)}</m:QueryString>
+</m:FindItem>
+""".strip()
+    root = _post_ews(config, access_token, search_xml)
+    refs = _parse_find_item_refs_response(root)
+    if not refs:
+        return []
+
+    ref_messages = [
+        ExchangeMessage(
+            item_id=ref.item_id,
+            change_key=ref.change_key,
+            subject="",
+            received_at="",
+            sender_name="",
+            sender_email="",
+            is_read=None,
+        )
+        for ref in refs
+    ]
+    details_root = _post_ews(
+        config,
+        access_token,
+        _build_get_item_request(ref_messages, include_body=config.include_body),
+    )
+    messages = _parse_get_item_response(
+        details_root, body_max_chars=config.body_max_chars
+    )
+    return [asdict(msg) for msg in messages]
+
+
+def read_message(config: ExchangeConfig, *, item_id: str) -> dict[str, Any]:
+    """Fetch a single Duke email by its EWS item_id and return full details."""
+    access_token = get_access_token(config)
+    ref = ExchangeMessage(
+        item_id=item_id,
+        change_key="",
+        subject="",
+        received_at="",
+        sender_name="",
+        sender_email="",
+        is_read=None,
+    )
+    details_root = _post_ews(
+        config,
+        access_token,
+        _build_get_item_request([ref], include_body=True),
+    )
+    messages = _parse_get_item_response(
+        details_root, body_max_chars=config.body_max_chars
+    )
+    if not messages:
+        raise ExchangeError(f"No message found for item_id: {item_id}")
+    return asdict(messages[0])
+
+
 def _sender_matches_any(message: ExchangeMessage, patterns: tuple[str, ...]) -> bool:
     sender_blob = f"{message.sender_name} {message.sender_email}".lower()
     return any(pattern in sender_blob for pattern in patterns)
@@ -776,6 +898,12 @@ def _should_notify_message(
     has_security_signal = _subject_matches_any(
         message, SECURITY_HINTS
     ) or _body_matches_any(message, SECURITY_HINTS)
+    has_verification_signal = _subject_matches_any(
+        message, VERIFICATION_HINTS
+    ) or _body_matches_any(message, VERIFICATION_HINTS)
+    has_calendar_signal = _subject_matches_any(
+        message, CALENDAR_HINTS
+    ) or _body_matches_any(message, CALENDAR_HINTS)
     action_score = sum(
         (
             _subject_matches_any(message, ACTION_HINTS),
@@ -791,18 +919,25 @@ def _should_notify_message(
     looks_bulk = _sender_matches_any(message, NEWSLETTER_HINTS) or _subject_matches_any(
         message, NEWSLETTER_HINTS
     )
+    looks_mailing_list = _body_matches_any(message, MAILING_LIST_HINTS)
     looks_routine = _subject_matches_any(message, ROUTINE_HINTS)
     direct_sender = _is_direct_sender(message)
 
     if has_security_signal:
-        return True, "security-sensitive"
+        return False, "security or sign-in alert"
+    if has_verification_signal:
+        return False, "verification or one-time code"
+    if has_calendar_signal:
+        return False, "calendar or meeting invite (already on calendar)"
     if looks_bulk:
         return False, "bulk or newsletter email"
+    if looks_mailing_list:
+        return False, "mailing list"
     if direct_sender and not looks_bulk and not looks_routine:
         return True, "direct human or non-bulk sender"
     if action_score >= 2 and not looks_bulk:
         return True, "deadline or action required"
-    if _sender_matches_any(message, AUTOMATED_SENDER_HINTS) and not has_security_signal:
+    if _sender_matches_any(message, AUTOMATED_SENDER_HINTS):
         return False, "automated notification"
     if looks_routine and opportunity_score == 0:
         return False, "routine update"
@@ -813,14 +948,7 @@ def _build_hook_message(
     config: ExchangeConfig, message: ExchangeMessage, *, reason: str
 ) -> str:
     lines = [
-        "A new Duke email passed the local importance filter.",
-        f"Why it passed: {reason}.",
-        "Reply in at most 3 short lines:",
-        "1. Why it matters",
-        "2. Deadline or action item if any",
-        '3. One suggested next step as a question, like "Want me to draft a reply?" or "Want me to add a todo?"',
-        "If it looks like an application, internship, funding, or opportunity, you may ask whether to apply or review requirements.",
-        "",
+        "--- EMAIL CONTEXT (preserve for followup) ---",
         f"Account: {config.email}",
         f"From: {message.sender_display()}",
         f"Subject: {message.subject}",
@@ -828,7 +956,14 @@ def _build_hook_message(
     if message.received_at:
         lines.append(f"Received: {message.received_at}")
     if config.include_body and message.body:
-        lines.extend(["", "Body snippet:", message.body])
+        lines.extend(["", "Body:", message.body])
+    lines.extend(
+        [
+            "--- END EMAIL CONTEXT ---",
+            "",
+            "Summarize this email in one sentence, then ask: want me to add anything to your todos?",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -958,6 +1093,153 @@ def watch(config: ExchangeConfig, *, once: bool = False) -> dict[str, Any] | Non
                 f"Duke Exchange watch cycle failed: {exc}", file=sys.stderr, flush=True
             )
         time.sleep(config.poll_seconds)
+
+
+def _config_from_env() -> ExchangeConfig:
+    """Build an ExchangeConfig from environment variables only (no argparse)."""
+    email = os.environ.get("DUKE_EXCHANGE_EMAIL", "").strip()
+    if not email:
+        raise ExchangeError(
+            "DUKE_EXCHANGE_EMAIL is not set. Duke email is not connected."
+        )
+
+    token_path = Path(
+        os.environ.get("DUKE_EXCHANGE_TOKEN_PATH", "").strip() or _default_token_path()
+    ).expanduser()
+    sync_state_path = Path(
+        os.environ.get("DUKE_EXCHANGE_SYNC_STATE_PATH", "").strip()
+        or _default_sync_state_path()
+    ).expanduser()
+
+    deliver_to = (
+        os.environ.get("DUKE_EXCHANGE_DELIVER_TO", "")
+        or os.environ.get("ALLOWED_USER_ID", "")
+    ).strip()
+    deliver_channel = os.environ.get("DUKE_EXCHANGE_DELIVER_CHANNEL", "").strip()
+    if not deliver_channel and deliver_to:
+        deliver_channel = "telegram"
+
+    notify_mode = (
+        os.environ.get("DUKE_EXCHANGE_NOTIFY_MODE", "important").strip().lower()
+    )
+    if notify_mode not in {"important", "all", "off"}:
+        notify_mode = "important"
+
+    return ExchangeConfig(
+        email=email,
+        client_id=(
+            os.environ.get("DUKE_EXCHANGE_CLIENT_ID", "") or DEFAULT_DUKE_CLIENT_ID
+        ).strip(),
+        tenant=(os.environ.get("DUKE_EXCHANGE_TENANT", "") or DEFAULT_TENANT).strip(),
+        scope=(os.environ.get("DUKE_EXCHANGE_SCOPE", "") or DEFAULT_SCOPE).strip(),
+        ews_url=(
+            os.environ.get("DUKE_EXCHANGE_EWS_URL", "") or DEFAULT_EWS_URL
+        ).strip(),
+        token_path=token_path,
+        sync_state_path=sync_state_path,
+        hook_url=(
+            os.environ.get("DUKE_EXCHANGE_HOOK_URL", "") or DEFAULT_HOOK_URL
+        ).strip(),
+        hook_token=os.environ.get("OPENCLAW_HOOK_TOKEN", "").strip(),
+        channel=deliver_channel or None,
+        to=deliver_to or None,
+        poll_seconds=int(os.environ.get("DUKE_EXCHANGE_POLL_SECONDS", "60")),
+        max_changes=int(os.environ.get("DUKE_EXCHANGE_MAX_CHANGES", "25")),
+        include_body=_env_flag("DUKE_EXCHANGE_INCLUDE_BODY", True),
+        body_max_chars=int(os.environ.get("DUKE_EXCHANGE_BODY_MAX_CHARS", "1200")),
+        notify_mode=notify_mode,
+        always_notify_senders=_csv_values(
+            os.environ.get("DUKE_EXCHANGE_ALWAYS_NOTIFY_SENDERS", "")
+        ),
+        never_notify_senders=_csv_values(
+            os.environ.get("DUKE_EXCHANGE_NEVER_NOTIFY_SENDERS", "")
+        ),
+        tracked_item_limit=int(
+            os.environ.get("DUKE_EXCHANGE_TRACKED_ITEM_LIMIT", "200")
+        ),
+    )
+
+
+def is_duke_email_connected() -> bool:
+    """Check whether Duke email env vars are configured and a token exists."""
+    email = os.environ.get("DUKE_EXCHANGE_EMAIL", "").strip()
+    if not email:
+        return False
+    token_path = Path(
+        os.environ.get("DUKE_EXCHANGE_TOKEN_PATH", "").strip() or _default_token_path()
+    ).expanduser()
+    return token_path.exists()
+
+
+def tool_search_duke_email(query: str, max_results: int = 10) -> str:
+    """Bot-callable tool: search Duke inbox by keyword."""
+    if not is_duke_email_connected():
+        return "Duke email is not connected. Set DUKE_EXCHANGE_EMAIL and run auth-device first."
+    try:
+        config = _config_from_env()
+        results = search_inbox(config, query=query, limit=max_results)
+        if not results:
+            return f"No Duke emails found matching: {query}"
+        lines = [f"Found {len(results)} Duke email(s) for '{query}':", ""]
+        for msg in results:
+            sender = msg.get("sender_name") or msg.get("sender_email") or "(unknown)"
+            lines.append(
+                f"- [{msg.get('received_at', '')}] From: {sender} | Subject: {msg.get('subject', '(no subject)')}"
+            )
+            if msg.get("body"):
+                snippet = msg["body"][:200].replace("\n", " ").strip()
+                lines.append(f"  Snippet: {snippet}")
+            lines.append(f"  item_id: {msg.get('item_id', '')}")
+        return "\n".join(lines)
+    except ExchangeError as exc:
+        return f"Duke email search failed: {exc}"
+    except Exception as exc:
+        return f"Duke email search error: {exc}"
+
+
+def tool_read_duke_email(item_id: str) -> str:
+    """Bot-callable tool: read a single Duke email by item_id."""
+    if not is_duke_email_connected():
+        return "Duke email is not connected. Set DUKE_EXCHANGE_EMAIL and run auth-device first."
+    try:
+        config = _config_from_env()
+        msg = read_message(config, item_id=item_id)
+        lines = [
+            f"From: {msg.get('sender_name', '')} <{msg.get('sender_email', '')}>",
+            f"Subject: {msg.get('subject', '(no subject)')}",
+            f"Received: {msg.get('received_at', '')}",
+            "",
+            msg.get("body", "(no body)"),
+        ]
+        return "\n".join(lines)
+    except ExchangeError as exc:
+        return f"Duke email read failed: {exc}"
+    except Exception as exc:
+        return f"Duke email read error: {exc}"
+
+
+def tool_list_duke_email(max_results: int = 10) -> str:
+    """Bot-callable tool: list recent Duke inbox emails."""
+    if not is_duke_email_connected():
+        return "Duke email is not connected. Set DUKE_EXCHANGE_EMAIL and run auth-device first."
+    try:
+        config = _config_from_env()
+        result = probe_inbox(config, limit=max_results)
+        messages = result.get("messages", [])
+        if not messages:
+            return "Duke inbox is empty or no recent messages."
+        lines = [f"Recent Duke emails ({len(messages)}):", ""]
+        for msg in messages:
+            sender = msg.get("sender_name") or msg.get("sender_email") or "(unknown)"
+            lines.append(
+                f"- [{msg.get('received_at', '')}] From: {sender} | Subject: {msg.get('subject', '(no subject)')}"
+            )
+            lines.append(f"  item_id: {msg.get('item_id', '')}")
+        return "\n".join(lines)
+    except ExchangeError as exc:
+        return f"Duke email list failed: {exc}"
+    except Exception as exc:
+        return f"Duke email list error: {exc}"
 
 
 def _config_from_args(args: argparse.Namespace) -> ExchangeConfig:

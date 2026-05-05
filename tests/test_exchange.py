@@ -147,12 +147,13 @@ def test_build_hook_message_respects_include_body(tmp_path):
     )
 
     text = exchange._build_hook_message(config, message, reason="direct sender")
-    assert "Body snippet" not in text
+    assert "Body" not in text or "EMAIL CONTEXT" in text
 
     config.include_body = True
     text = exchange._build_hook_message(config, message, reason="direct sender")
-    assert "Body snippet" in text
+    assert "Body:" in text
     assert "Sensitive body" in text
+    assert "EMAIL CONTEXT" in text
 
 
 def test_device_authorize_polls_until_success(monkeypatch, tmp_path):

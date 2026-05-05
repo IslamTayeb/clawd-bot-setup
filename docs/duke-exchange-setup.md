@@ -203,3 +203,24 @@ If that happens, the next escalation path is not Gmail or IMAP. It is:
 3. Re-run `auth-device` with `DUKE_EXCHANGE_CLIENT_ID=<new-client-id>`
 
 If Duke eventually prefers Microsoft Graph instead of EWS for your account, this repo can add a Graph watcher later. This first pass is intentionally using EWS because it matches Duke's published modern-auth client guidance most closely.
+
+## Fallback: forward Duke email to Gmail
+
+If the Exchange/EWS integration is blocked by policy, Duke University students can forward their email to one Gmail account as a workaround. Duke Health users cannot use this option.
+
+Steps:
+
+1. Log into `https://mail.duke.edu`.
+2. Go to Settings > View all Outlook settings > Mail > Forwarding.
+3. Enter one of your Gmail addresses (e.g. `islam.moh.islamm@gmail.com`).
+4. Check "Keep a copy" so Duke mail is still available in Outlook.
+5. Save.
+
+Caveats:
+
+- Only one external forwarding address is supported by Duke OIT.
+- Delivery is not guaranteed: some messages may be forwarded but rejected by Gmail's spam filters or the sender's DMARC policy.
+- Forwarded mail will appear in the Gmail watcher, not the Duke Exchange watcher. The `from:` address is preserved, so filtering still works.
+- This is a workaround, not a replacement for the direct Exchange integration.
+
+Reference: `https://oit.duke.edu/help/articles/kb0015771/`

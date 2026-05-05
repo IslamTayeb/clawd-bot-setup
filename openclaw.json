@@ -4,7 +4,12 @@
       "audio": {
         "models": [
           { "provider": "openai", "model": "gpt-4o-mini-transcribe" },
-          { "type": "cli", "command": "/home/ec2-user/clawd-bot/.venv/bin/python", "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"], "timeoutSeconds": 1800 }
+          {
+            "type": "cli",
+            "command": "/home/ec2-user/clawd-bot/.venv/bin/python",
+            "args": ["-m", "clawd_ops.openclaw_audio_cli", "{{MediaPath}}"],
+            "timeoutSeconds": 1800
+          }
         ]
       }
     }
@@ -13,6 +18,9 @@
     "tts": {
       "auto": "tagged",
       "provider": "openai",
+      "prefsPath": "/home/ec2-user/clawd-bot/.openclaw/settings/tts.json",
+      "maxTextLength": 1000000,
+      "timeoutMs": 180000,
       "openai": {
         "model": "gpt-4o-mini-tts",
         "voice": "alloy"
