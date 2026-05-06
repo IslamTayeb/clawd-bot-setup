@@ -13,10 +13,10 @@ def test_task_file_path_resolves_relative_dates(monkeypatch):
         "_local_now",
         lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
     )
-    assert vault.task_file_path("today") == "tasks/260310.md"
-    assert vault.task_file_path("yesterday") == "tasks/260309.md"
-    assert vault.task_file_path("tomorrow") == "tasks/260311.md"
-    assert vault.task_file_path("March 9, 2026") == "tasks/260309.md"
+    assert vault.task_file_path("today") == "tasks/W11-260309.md"
+    assert vault.task_file_path("yesterday") == "tasks/W11-260309.md"
+    assert vault.task_file_path("tomorrow") == "tasks/W11-260309.md"
+    assert vault.task_file_path("March 2, 2026") == "tasks/W10-260302.md"
 
 
 def test_add_todos_appends_to_existing_task_file(git_vault, monkeypatch):
@@ -25,39 +25,72 @@ def test_add_todos_appends_to_existing_task_file(git_vault, monkeypatch):
         "_local_now",
         lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
     )
-    task_path = git_vault / "tasks" / "260310.md"
+    task_path = git_vault / "tasks" / "W11-260309.md"
     task_path.write_text("- [ ] existing\n", encoding="utf-8")
-    run_git(git_vault, "add", "tasks/260310.md")
+    run_git(git_vault, "add", "tasks/W11-260309.md")
     run_git(git_vault, "commit", "-m", "Seed task file")
     run_git(git_vault, "push")
 
     message = vault.add_todos(["buy milk"], "today")
 
-    assert message == "Added 1 todo(s) to tasks/260310.md."
+    assert message == "Added 1 todo(s) to tasks/W11-260309.md."
     assert task_path.read_text(encoding="utf-8") == "- [ ] existing\n- [ ] buy milk\n"
     assert run_git(git_vault, "status", "--short") == ""
 
 
-def test_add_todos_migrates_legacy_task_filename(git_vault, monkeypatch):
+def test_add_todos_writes_weekly_and_preserves_legacy_daily_reads(
+    git_vault, monkeypatch
+):
     monkeypatch.setattr(
         vault,
         "_local_now",
         lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
     )
-    legacy_path = git_vault / "tasks" / "031026.md"
-    preferred_path = git_vault / "tasks" / "260310.md"
-    legacy_path.write_text("- [ ] legacy\n", encoding="utf-8")
-    run_git(git_vault, "add", "tasks/031026.md")
-    run_git(git_vault, "commit", "-m", "Seed legacy task file")
+    daily_path = git_vault / "tasks" / "260310.md"
+    weekly_path = git_vault / "tasks" / "W11-260309.md"
+    daily_path.write_text("- [ ] legacy daily\n", encoding="utf-8")
+    run_git(git_vault, "add", "tasks/260310.md")
+    run_git(git_vault, "commit", "-m", "Seed daily task file")
     run_git(git_vault, "push")
 
     message = vault.add_todos(["buy milk"], "today")
 
-    assert message == "Added 1 todo(s) to tasks/260310.md."
-    assert not legacy_path.exists()
-    assert (
-        preferred_path.read_text(encoding="utf-8") == "- [ ] legacy\n- [ ] buy milk\n"
+    assert message == "Added 1 todo(s) to tasks/W11-260309.md."
+    assert daily_path.exists()
+    assert weekly_path.read_text(encoding="utf-8") == "- [ ] buy milk\n"
+    task_list = vault.read_task_list("today")
+    assert "## tasks/W11-260309.md" in task_list
+    assert "- [ ] buy milk" in task_list
+    assert "## tasks/260310.md" in task_list
+    assert "- [ ] legacy daily" in task_list
+    assert run_git(git_vault, "status", "--short") == ""
+
+
+def test_add_todos_carries_forward_unchecked_tasks_from_previous_week(
+    git_vault, monkeypatch
+):
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
     )
+    previous_path = git_vault / "tasks" / "W10-260302.md"
+    current_path = git_vault / "tasks" / "W11-260309.md"
+    previous_path.write_text(
+        "- [ ] carry this\n- [x] done already\n  - [ ] nested carry\n",
+        encoding="utf-8",
+    )
+    run_git(git_vault, "add", "tasks/W10-260302.md")
+    run_git(git_vault, "commit", "-m", "Seed previous weekly tasks")
+    run_git(git_vault, "push")
+
+    message = vault.add_todos(["new task"], "today")
+
+    assert message == "Added 1 todo(s) to tasks/W11-260309.md."
+    assert current_path.read_text(encoding="utf-8") == (
+        "- [ ] carry this\n  - [ ] nested carry\n- [ ] new task\n"
+    )
+    assert run_git(git_vault, "status", "--short") == ""
     assert run_git(git_vault, "status", "--short") == ""
 
 
@@ -80,6 +113,30 @@ def test_migrate_task_filenames_renames_legacy_files(git_vault):
     assert not (git_vault / "tasks" / "111925.md").exists()
     assert (git_vault / "tasks" / "260310.md").read_text(encoding="utf-8") == "alpha\n"
     assert (git_vault / "tasks" / "251119.md").read_text(encoding="utf-8") == "beta\n"
+    assert run_git(git_vault, "status", "--short") == ""
+
+
+def test_add_world_breaking_idea_appends_entry_and_commits(git_vault, monkeypatch):
+    monkeypatch.setattr(
+        vault,
+        "_local_now",
+        lambda: datetime(2026, 3, 10, 12, tzinfo=ZoneInfo("America/New_York")),
+    )
+
+    result = vault.add_world_breaking_idea("AI tutor that audits lab habits")
+
+    assert result == {
+        "id": "2026-03-10-ai-tutor-that-audits-lab-habits",
+        "idea_path": "world-breaking-ideas.md",
+        "report_path": "research/world-breaking-ideas/2026-03-10-ai-tutor-that-audits-lab-habits.md",
+    }
+    text = (git_vault / "world-breaking-ideas.md").read_text(encoding="utf-8")
+    assert "# World-Breaking Ideas" in text
+    assert "AI tutor that audits lab habits" in text
+    assert (
+        "research/world-breaking-ideas/2026-03-10-ai-tutor-that-audits-lab-habits.md"
+        in text
+    )
     assert run_git(git_vault, "status", "--short") == ""
 
 

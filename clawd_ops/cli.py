@@ -22,9 +22,10 @@ from clawd_ops.onepassword import (
     read_1password_secret,
     whoami_1password,
 )
-from clawd_ops.search import browse_web, search_papers
+from clawd_ops.search import browse_web, search_github_repos, search_papers, search_web
 from clawd_ops.vault import (
     add_todos,
+    add_world_breaking_idea,
     add_email_filter,
     forget_memory,
     list_files,
@@ -52,6 +53,7 @@ def _tool_manifest():
 
 COMMANDS: dict[str, Callable[..., object]] = {
     "add_todos": add_todos,
+    "add_world_breaking_idea": add_world_breaking_idea,
     "add_email_filter": add_email_filter,
     "browse_web": browse_web,
     "finish_google_auth": finish_google_auth,
@@ -75,7 +77,9 @@ COMMANDS: dict[str, Callable[..., object]] = {
     "read_1password_secret": read_1password_secret,
     "resolve_conflict": resolve_conflict,
     "save_research": save_research,
+    "search_github_repos": search_github_repos,
     "search_papers": search_papers,
+    "search_web": search_web,
     "set_google_auth_credentials": set_google_auth_credentials,
     "start_google_auth": start_google_auth,
     "sync_app_repo": sync_app_repo,

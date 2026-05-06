@@ -17,7 +17,7 @@ Telegram and Obsidian assistant running on OpenClaw, backed by Claude on Bedrock
 - Uses Claude tool use through Bedrock for note reading, note writing, todos, memory, research, and web browsing.
 - Syncs the Obsidian vault with fetch plus merge before reads and commit or push after writes.
 - Stores durable assistant memory in `memory/clawd.md`, and that file is tracked in the app repo so durable preferences survive deploys and merge back through the normal git sync flow.
-- Resolves dated task workflows like `today`, `yesterday`, and explicit dates into `tasks/YYMMDD.md`.
+- Resolves dated task workflows like `today`, `yesterday`, and explicit dates into weekly `tasks/W##-YYMMDD.md` files while still reading legacy daily task files.
 - Uses the Python audio bridge for transcription, with streaming for short notes and batch jobs for longer notes.
 - Reports sync conflicts to Telegram with follow-up conflict tools for inspection and explicit resolution.
 

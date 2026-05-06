@@ -29,9 +29,10 @@ from clawd_ops.onepassword import (
     read_1password_secret,
     whoami_1password,
 )
-from clawd_ops.search import browse_web, search_papers
+from clawd_ops.search import browse_web, search_github_repos, search_papers, search_web
 from clawd_ops.vault import (
     add_todos,
+    add_world_breaking_idea,
     add_email_filter,
     forget_memory,
     list_files,
@@ -61,7 +62,7 @@ Core behaviors:
 - When the user wants to connect a Google account for Gmail or Calendar, use the Google auth tools.
 - When the user asks what you remember about them, use the memory read tool.
 - When the user wants to update or create arbitrary markdown files in the vault, use the write_note tool.
-- Keep todo items short and actionable. The todo workflow writes into tasks/YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow.
+- Keep todo items short and actionable. The todo workflow writes into weekly tasks/W##-YYMMDD.md files and supports relative dates like today, yesterday, and tomorrow. Legacy daily tasks/YYMMDD.md files may still exist for reads.
 - If a sync conflict exists, use the conflict tools to explain the situation and wait for the user to choose a resolution strategy.
 - If a tool fails, explain the failure plainly and propose the next best action.
 
@@ -137,7 +138,7 @@ TOOLS = [
     {
         "toolSpec": {
             "name": "add_todos",
-            "description": "Add todo items to today's Obsidian tasks/YYMMDD.md file. For sub-tasks, prefix an item with a tab character.",
+            "description": "Add todo items to the current weekly Obsidian task file. For sub-tasks, preserve leading indentation.",
             "inputSchema": {
                 "json": {
                     "type": "object",
@@ -183,8 +184,54 @@ TOOLS = [
     },
     {
         "toolSpec": {
+            "name": "search_web",
+            "description": "Search the web for current research sources.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query.",
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results.",
+                            "default": 8,
+                        },
+                    },
+                    "required": ["query"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "search_github_repos",
+            "description": "Search GitHub repositories relevant to a project, product, or research idea.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "Search query.",
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Maximum number of results.",
+                            "default": 8,
+                        },
+                    },
+                    "required": ["query"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
             "name": "read_task_list",
-            "description": "Read a dated task note from the tasks/YYMMDD.md workflow.",
+            "description": "Read task notes from the weekly task workflow, including legacy daily task files when present.",
             "inputSchema": {
                 "json": {
                     "type": "object",
@@ -264,6 +311,28 @@ TOOLS = [
                         },
                     },
                     "required": ["title", "content"],
+                }
+            },
+        }
+    },
+    {
+        "toolSpec": {
+            "name": "add_world_breaking_idea",
+            "description": "Append a world-breaking idea to world-breaking-ideas.md and reserve a research report path.",
+            "inputSchema": {
+                "json": {
+                    "type": "object",
+                    "properties": {
+                        "idea": {
+                            "type": "string",
+                            "description": "The original idea text.",
+                        },
+                        "report_path": {
+                            "type": "string",
+                            "description": "Optional report path relative to the vault.",
+                        },
+                    },
+                    "required": ["idea"],
                 }
             },
         }
@@ -794,6 +863,9 @@ TOOLS = [
 
 TOOL_FUNCTIONS = {
     "add_todos": lambda items, target_date="today": add_todos(items, target_date),
+    "add_world_breaking_idea": lambda idea, report_path=None: add_world_breaking_idea(
+        idea, report_path
+    ),
     "add_email_filter": lambda kind, pattern: add_email_filter(kind, pattern),
     "finish_google_auth": lambda email, auth_url, services="gmail,calendar", readonly=False, client="": (
         finish_google_auth(email, auth_url, services, readonly, client)
@@ -801,7 +873,11 @@ TOOL_FUNCTIONS = {
     "get_1password_item": lambda item, vault="": get_1password_item(item, vault),
     "list_1password_accounts": lambda: list_1password_accounts(),
     "list_1password_vaults": lambda: list_1password_vaults(),
+    "search_github_repos": lambda query, max_results=8: search_github_repos(
+        query, max_results
+    ),
     "search_papers": lambda query, max_results=5: search_papers(query, max_results),
+    "search_web": lambda query, max_results=8: search_web(query, max_results),
     "read_task_list": lambda target_date="today": read_task_list(target_date),
     "read_notes": lambda path: read_notes(path),
     "write_note": lambda path, content, mode="overwrite": write_note(

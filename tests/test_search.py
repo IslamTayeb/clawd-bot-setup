@@ -40,3 +40,59 @@ def test_search_arxiv_parses_feed(monkeypatch):
             "url": "https://arxiv.org/abs/1234.5678",
         }
     ]
+
+
+def test_search_web_parses_duckduckgo_results(monkeypatch):
+    class Response:
+        text = """
+        <div class="result">
+          <a class="result__a" href="/l/?uddg=https%3A%2F%2Fexample.com%2Fpaper">Example Result</a>
+          <a class="result__snippet">Useful snippet</a>
+        </div>
+        """
+
+        def raise_for_status(self):
+            return None
+
+    monkeypatch.setattr(search.requests, "get", lambda *args, **kwargs: Response())
+
+    assert search.search_web("test query", 1) == [
+        {
+            "title": "Example Result",
+            "url": "https://example.com/paper",
+            "snippet": "Useful snippet",
+        }
+    ]
+
+
+def test_search_github_repos_parses_api_response(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "items": [
+                    {
+                        "full_name": "owner/repo",
+                        "description": "Repo description",
+                        "html_url": "https://github.com/owner/repo",
+                        "stargazers_count": 42,
+                        "language": "Python",
+                        "updated_at": "2026-03-10T00:00:00Z",
+                    }
+                ]
+            }
+
+    monkeypatch.setattr(search.requests, "get", lambda *args, **kwargs: Response())
+
+    assert search.search_github_repos("agent tooling", 1) == [
+        {
+            "full_name": "owner/repo",
+            "description": "Repo description",
+            "url": "https://github.com/owner/repo",
+            "stars": 42,
+            "language": "Python",
+            "updated_at": "2026-03-10T00:00:00Z",
+        }
+    ]

@@ -19,7 +19,10 @@ def test_build_converse_request_uses_tool_config(git_vault, monkeypatch):
     assert (
         "Persistent memory file path: memory/clawd.md" in request["system"][0]["text"]
     )
-    assert "Today's task note path is tasks/260310.md." in request["system"][0]["text"]
+    assert (
+        "Today's task note path is tasks/W11-260309.md."
+        in request["system"][0]["text"]
+    )
 
 
 def test_memory_write_requires_explicit_request(git_vault):

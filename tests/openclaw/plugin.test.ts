@@ -13,6 +13,7 @@ import {
 describe("clawd-obsidian plugin", () => {
   it("registers tools and prompt guidance", () => {
     const registerTool = vi.fn();
+    const registerCommand = vi.fn();
     const on = vi.fn();
 
     plugin.register({
@@ -34,12 +35,12 @@ describe("clawd-obsidian plugin", () => {
       registerCli: vi.fn(),
       registerService: vi.fn(),
       registerProvider: vi.fn(),
-      registerCommand: vi.fn(),
+      registerCommand,
       registerContextEngine: vi.fn(),
       on,
     });
 
-    expect(registerTool).toHaveBeenCalledTimes(14);
+    expect(registerTool).toHaveBeenCalledTimes(17);
     expect(registerTool).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "list_conflicts",
@@ -48,6 +49,28 @@ describe("clawd-obsidian plugin", () => {
     expect(registerTool).toHaveBeenCalledWith(
       expect.objectContaining({
         name: "resolve_conflict",
+      }),
+    );
+    expect(registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "search_web",
+      }),
+    );
+    expect(registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "search_github_repos",
+      }),
+    );
+    expect(registerTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "add_world_breaking_idea",
+      }),
+    );
+    expect(registerCommand).toHaveBeenCalledTimes(1);
+    expect(registerCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "idea",
+        acceptsArgs: true,
       }),
     );
     expect(on).toHaveBeenCalledWith(
@@ -74,7 +97,7 @@ describe("clawd-obsidian plugin", () => {
     });
     expect(envelope.ok).toBe(true);
     if (envelope.ok) {
-      expect(String(envelope.result)).toMatch(/^tasks\/\d{6}\.md$/);
+      expect(String(envelope.result)).toMatch(/^tasks\/W\d{2}-\d{6}\.md$/);
     }
   });
 

@@ -3,8 +3,17 @@ import requests
 import xml.etree.ElementTree as ET
 from bs4 import BeautifulSoup
 from requests.exceptions import SSLError
+from urllib.parse import parse_qs, urlparse
 from urllib3 import disable_warnings
 from urllib3.exceptions import InsecureRequestWarning
+
+
+def _clamp_max_results(max_results: int, default: int = 8, limit: int = 20) -> int:
+    try:
+        value = int(max_results)
+    except (TypeError, ValueError):
+        value = default
+    return max(1, min(value, limit))
 
 
 def _normalize_authors(authors) -> list[str]:
@@ -31,6 +40,95 @@ def _fetch_text(url: str, verify: bool = True) -> str:
     )
     response.raise_for_status()
     return _extract_text(response.text)[:8000]
+
+
+def _duckduckgo_result_url(href: str) -> str:
+    parsed = urlparse(href)
+    if parsed.path == "/l/":
+        target = parse_qs(parsed.query).get("uddg", [""])[0]
+        if target:
+            return target
+    return href
+
+
+def search_web(query: str, max_results: int = 8) -> list[dict]:
+    cleaned_query = " ".join(query.split()).strip()
+    if not cleaned_query:
+        raise ValueError("query must not be empty")
+
+    limit = _clamp_max_results(max_results)
+    response = requests.get(
+        "https://duckduckgo.com/html/",
+        params={"q": cleaned_query},
+        timeout=15,
+        headers={"User-Agent": "Mozilla/5.0 (compatible; research-bot)"},
+    )
+    response.raise_for_status()
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    results = []
+    for result in soup.select(".result"):
+        link = result.select_one(".result__a")
+        if link is None:
+            continue
+        title = link.get_text(" ", strip=True)
+        href = link.get("href", "")
+        snippet_node = result.select_one(".result__snippet")
+        snippet = snippet_node.get_text(" ", strip=True) if snippet_node else ""
+        if not title or not href:
+            continue
+        results.append(
+            {
+                "title": title,
+                "url": _duckduckgo_result_url(href),
+                "snippet": snippet,
+            }
+        )
+        if len(results) >= limit:
+            break
+    return results
+
+
+def search_github_repos(query: str, max_results: int = 8) -> list[dict]:
+    cleaned_query = " ".join(query.split()).strip()
+    if not cleaned_query:
+        raise ValueError("query must not be empty")
+
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "clawd-research-bot",
+    }
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
+    response = requests.get(
+        "https://api.github.com/search/repositories",
+        params={
+            "q": cleaned_query,
+            "sort": "stars",
+            "order": "desc",
+            "per_page": _clamp_max_results(max_results),
+        },
+        timeout=15,
+        headers=headers,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    results = []
+    for item in payload.get("items", [])[: _clamp_max_results(max_results)]:
+        results.append(
+            {
+                "full_name": item.get("full_name", ""),
+                "description": item.get("description") or "",
+                "url": item.get("html_url", ""),
+                "stars": item.get("stargazers_count", 0),
+                "language": item.get("language") or "",
+                "updated_at": item.get("updated_at", ""),
+            }
+        )
+    return results
 
 
 def search_arxiv(query: str, max_results: int = 5) -> list[dict]:

@@ -16,13 +16,15 @@ Use this skill when the request involves the user's Obsidian vault, task workflo
 
 ## Task Notes
 
-- Task notes live in `tasks/YYMMDD.md`.
+- Task notes live in weekly files `tasks/W##-YYMMDD.md`, where `YYMMDD` is the Monday of that ISO week.
+- Legacy daily files `tasks/YYMMDD.md` may still exist; read both weekly and daily files when answering questions about tasks.
+- New todos should be written to the current weekly file.
 - Resolve relative dates before acting:
   - `today`
   - `yesterday`
   - `tomorrow`
-- If the target file already exists, append new todos to it.
-- If the user references yesterday's list while it is currently March 10, 2026, that means `tasks/260309.md`.
+- If the target weekly file already exists, append new todos to it.
+- If the user references yesterday's list while it is currently March 10, 2026, that means `tasks/W11-260309.md`.
 
 ## Note Editing
 

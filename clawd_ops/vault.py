@@ -27,6 +27,8 @@ EMAIL_FILTER_KINDS = (
 MARKDOWN_SUFFIXES = {".md", ".markdown"}
 READABLE_SUFFIXES = {".md", ".markdown", ".pdf"}
 LEGACY_TASK_FILE_RE = re.compile(r"^\d{6}\.md$")
+WEEKLY_TASK_FILE_RE = re.compile(r"^W\d{2}-(\d{6})\.md$")
+UNCHECKED_TASK_RE = re.compile(r"^[ \t]*[-*] \[ \] .+\S")
 
 try:
     import fcntl
@@ -287,44 +289,96 @@ def _resolve_task_date(target_date: str = "today"):
 
 def task_file_path(target_date: str = "today") -> str:
     task_date = _resolve_task_date(target_date)
+    monday = task_date - timedelta(days=task_date.isoweekday() - 1)
+    week = task_date.isocalendar().week
+    return f"tasks/W{week:02d}-{monday.strftime('%y%m%d')}.md"
+
+
+def _daily_task_file_path_for(task_date) -> str:
     return f"tasks/{task_date.strftime('%y%m%d')}.md"
 
 
-def _legacy_task_file_path_for(task_date) -> str:
+def _legacy_mmddyy_task_file_path_for(task_date) -> str:
     return f"tasks/{task_date.strftime('%m%d%y')}.md"
 
 
-def _task_paths(target_date: str = "today") -> tuple[Path, Path]:
+def _task_paths(target_date: str = "today") -> tuple[Path, list[Path]]:
     task_date = _resolve_task_date(target_date)
     preferred = _resolve_in_vault(task_file_path(target_date))
-    legacy = _resolve_in_vault(_legacy_task_file_path_for(task_date))
-    return preferred, legacy
+    legacy_paths = [
+        _resolve_in_vault(_daily_task_file_path_for(task_date)),
+        _resolve_in_vault(_legacy_mmddyy_task_file_path_for(task_date)),
+    ]
+    return preferred, [path for path in legacy_paths if path != preferred]
 
 
 def _coalesce_task_file(
     target_date: str = "today", migrate_legacy: bool = False
 ) -> Path:
-    preferred, legacy = _task_paths(target_date)
-    if preferred.exists() and legacy.exists() and preferred != legacy:
-        if not migrate_legacy:
-            return preferred
-
-        preferred_text = preferred.read_text(encoding="utf-8").strip()
-        legacy_text = legacy.read_text(encoding="utf-8").strip()
-        if preferred_text != legacy_text and legacy_text:
-            merged_parts = [part for part in (preferred_text, legacy_text) if part]
-            preferred.write_text("\n\n".join(merged_parts) + "\n", encoding="utf-8")
-        legacy.unlink()
-        return preferred
-
+    preferred, legacy_paths = _task_paths(target_date)
     if preferred.exists():
         return preferred
-    if legacy.exists():
-        if migrate_legacy and preferred != legacy:
-            legacy.rename(preferred)
-            return preferred
-        return legacy
+    if not migrate_legacy:
+        for legacy in legacy_paths:
+            if legacy.exists():
+                return legacy
     return preferred
+
+
+def _existing_task_files(target_date: str = "today") -> list[Path]:
+    preferred, legacy_paths = _task_paths(target_date)
+    existing = [path for path in [preferred, *legacy_paths] if path.exists()]
+    return list(dict.fromkeys(existing))
+
+
+def _weekly_task_monday_from_path(path: Path):
+    match = WEEKLY_TASK_FILE_RE.match(path.name)
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(1), "%y%m%d").date()
+    except ValueError:
+        return None
+
+
+def _previous_weekly_task_file(target: Path) -> Path | None:
+    tasks_dir = target.parent
+    target_monday = _weekly_task_monday_from_path(target)
+    if target_monday is None or not tasks_dir.exists():
+        return None
+
+    candidates: list[tuple[object, Path]] = []
+    for path in tasks_dir.iterdir():
+        if not path.is_file():
+            continue
+        monday = _weekly_task_monday_from_path(path)
+        if monday is not None and monday < target_monday:
+            candidates.append((monday, path))
+
+    if not candidates:
+        return None
+    return max(candidates, key=lambda item: item[0])[1]
+
+
+def _unchecked_tasks_from(path: Path) -> list[str]:
+    return [
+        line.rstrip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if UNCHECKED_TASK_RE.match(line)
+    ]
+
+
+def _render_todo_item(item: str) -> str:
+    raw_item = str(item).rstrip()
+    indent_match = re.match(r"^[ \t]*", raw_item)
+    indent = indent_match.group(0) if indent_match else ""
+    content = raw_item[len(indent) :]
+    content = re.sub(r"^[-*]\s+\[[ xX]\]\s*", "", content)
+    content = re.sub(r"^[-*]\s+", "", content)
+    normalized = _normalize_memory_item(content)
+    if not normalized:
+        return ""
+    return f"{indent}- [ ] {normalized}"
 
 
 def _memory_relative_path() -> str:
@@ -618,6 +672,10 @@ def _note_commit_message(action: str, path: Path) -> str:
     return f"{action}: {str(rel_path)[:60]}"
 
 
+def _slugify_note_name(text: str, fallback: str, max_length: int = 60) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:max_length] or fallback
+
+
 def write_note(path: str, content: str, mode: str = "overwrite") -> str:
     with _vault_lock():
         git_pull()
@@ -652,47 +710,48 @@ def read_task_list(target_date: str = "today") -> str:
     with _vault_lock():
         git_pull()
 
-        target = _coalesce_task_file(target_date)
-        if not target.exists():
+        task_files = _existing_task_files(target_date)
+        if not task_files:
             return f"Task file not found: {task_file_path(target_date)}"
-        return target.read_text(encoding="utf-8")
+        if len(task_files) == 1:
+            return task_files[0].read_text(encoding="utf-8")
+
+        sections = []
+        for path in task_files:
+            rel_path = path.relative_to(_vault())
+            sections.append(f"## {rel_path}\n\n{path.read_text(encoding='utf-8').strip()}")
+        return "\n\n".join(sections).strip() + "\n"
 
 
 def add_todos(items: list[str], target_date: str = "today") -> str:
     with _vault_lock():
         git_pull()
 
-        preferred, legacy = _task_paths(target_date)
-        target = _coalesce_task_file(target_date, migrate_legacy=True)
+        target, legacy_paths = _task_paths(target_date)
         target.parent.mkdir(parents=True, exist_ok=True)
 
-        lines = []
-        for item in items:
-            if item.startswith("\t"):
-                indent = item[: len(item) - len(item.lstrip("\t"))]
-                lines.append(
-                    f"{indent}- [ ] {_normalize_memory_item(item.lstrip(chr(9)))}"
-                )
-            else:
-                lines.append(f"- [ ] {_normalize_memory_item(item)}")
-
-        addition = "\n".join(lines).strip()
-        if not addition:
+        lines = [line for item in items if (line := _render_todo_item(item))]
+        if not lines:
             raise ValueError("items must contain at least one todo")
 
         existing = target.read_text(encoding="utf-8") if target.exists() else ""
+        if not existing:
+            previous_weekly = _previous_weekly_task_file(target)
+            carry_forward = (
+                _unchecked_tasks_from(previous_weekly) if previous_weekly else []
+            )
+            if carry_forward:
+                existing = "\n".join(carry_forward) + "\n"
+
+        addition = "\n".join(lines)
         separator = "\n" if existing and not existing.endswith("\n") else ""
         updated = f"{existing}{separator}{addition}\n"
         target.write_text(updated, encoding="utf-8")
 
-        commit_paths = [target]
-        if legacy != target:
-            commit_paths.append(legacy)
-        if preferred != target and preferred not in commit_paths:
-            commit_paths.append(preferred)
+        commit_paths = [target, *legacy_paths]
 
         git_push(f"Add todos for {target.stem}", commit_paths)
-        return f"Added {len(items)} todo(s) to {target.relative_to(_vault())}."
+        return f"Added {len(lines)} todo(s) to {target.relative_to(_vault())}."
 
 
 def migrate_task_filenames(sync: bool = True) -> str:
@@ -747,15 +806,59 @@ def migrate_task_filenames(sync: bool = True) -> str:
         return "\n".join(lines)
 
 
+def add_world_breaking_idea(
+    idea: str, report_path: str | None = None
+) -> dict[str, str]:
+    with _vault_lock():
+        git_pull()
+
+        cleaned_idea = idea.strip()
+        if not cleaned_idea:
+            raise ValueError("idea must not be empty")
+
+        date_label = _local_now().strftime("%Y-%m-%d")
+        slug = _slugify_note_name(cleaned_idea, "idea")
+        idea_file = _resolve_in_vault("world-breaking-ideas.md")
+        existing = idea_file.read_text(encoding="utf-8") if idea_file.exists() else ""
+
+        if report_path and report_path.strip():
+            report = _resolve_in_vault(report_path)
+        else:
+            reports_dir = _resolve_in_vault("research/world-breaking-ideas")
+            report = reports_dir / f"{date_label}-{slug}.md"
+            suffix = 2
+            while report.exists() or report.relative_to(_vault()).as_posix() in existing:
+                report = reports_dir / f"{date_label}-{slug}-{suffix}.md"
+                suffix += 1
+
+        idea_id = report.stem
+        idea_file.parent.mkdir(parents=True, exist_ok=True)
+        report_rel = report.relative_to(_vault()).as_posix()
+        idea_rel = idea_file.relative_to(_vault()).as_posix()
+        created_at = _local_now().strftime("%Y-%m-%d %H:%M %Z").strip()
+
+        if not existing.strip():
+            existing = "# World-Breaking Ideas\n"
+
+        entry = (
+            f"## {created_at} - {idea_id}\n\n"
+            f"- Idea: {cleaned_idea}\n"
+            f"- Report: [{report_rel}]({report_rel})\n"
+            "- Status: Pending research\n"
+        )
+        separator = "\n\n" if existing.strip() else ""
+        idea_file.write_text(f"{existing.rstrip()}{separator}{entry}", encoding="utf-8")
+        git_push("Capture world-breaking idea", [idea_file])
+        return {"id": idea_id, "idea_path": idea_rel, "report_path": report_rel}
+
+
 def save_research(title: str, content: str) -> str:
     with _vault_lock():
         git_pull()
 
         research_dir = _resolve_in_vault("research")
         research_dir.mkdir(parents=True, exist_ok=True)
-        slug = (
-            re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60] or "research-note"
-        )
+        slug = _slugify_note_name(title, "research-note")
         target = research_dir / f"{slug}.md"
 
         if target.exists():
